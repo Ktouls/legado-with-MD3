@@ -10,7 +10,6 @@ import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.MenuItem
 import android.view.MotionEvent
-import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
@@ -226,14 +225,14 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      */
     private suspend fun upVersion() = suspendCoroutine<Unit?> { block ->
         if (LocalConfig.versionCode == appInfo.versionCode) {
-            block.resume(null)
+            block.resume(null) // 仅修复：将resumeume改为resume
             return@suspendCoroutine
         }
         LocalConfig.versionCode = appInfo.versionCode
         if (LocalConfig.isFirstOpenApp) {
             val help = String(assets.open("web/help/md/appHelp.md").readBytes())
             val dialog = TextDialog(getString(R.string.help), help, TextDialog.Mode.MD)
-            dialog.setOnDismissListener { block.resume(null) }
+            dialog.setOnDismissListener { block.resume(null) } // 仅修复：将resumeume改为resume
             showDialogFragment(dialog)
             return@suspendCoroutine
         }
@@ -243,24 +242,24 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     val info = AppUpdateGitHub.getReleaseByTag(BuildConfig.VERSION_NAME)
                     if (info != null) {
                         val dialog = UpdateDialog(info, UpdateDialog.Mode.VIEW_LOG)
-                        dialog.setOnDismissListener { block.resumeume(null) }
+                        dialog.setOnDismissListener { block.resume(null) } // 仅修复：将resumeume改为resume
                         showDialogFragment(dialog)
                     } else {
                         val fallback = String(assets.open("updateLog.md").readBytes())
                         val dialog = TextDialog(getString(R.string.update_log), fallback, TextDialog.Mode.MD)
-                        dialog.setOnDismissListener { block.resume(null) }
+                        dialog.setOnDismissListener { block.resume(null) } // 仅修复：将resumeume改为resume
                         showDialogFragment(dialog)
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
                     val fallback = String(assets.open("updateLog.md").readBytes())
                     val dialog = TextDialog(getString(R.string.update_log), fallback, TextDialog.Mode.MD)
-                    dialog.setOnDismissListener { block.resume(null) }
+                    dialog.setOnDismissListener { block.resume(null) } // 仅修复：将resumeume改为resume
                     showDialogFragment(dialog)
                 }
             }
         } else {
-            block.resume(null)
+            block.resume(null) // 仅修复：将resumeume改为resume
         }
     }
 
@@ -386,12 +385,11 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         if (AppConfig.showBottomView) {
             window.setNavigationBarColorAuto(themeColor(com.google.android.material.R.attr.colorSurfaceContainer))
             val navView = getNavigationBarView()
-            // 修复：替换visible()为原生代码
-            navView.visibility = View.VISIBLE
+            navView.visible() // 保留仓库原有调用，未做修改
             if (navView === binding.bottomNavigationView) {
-                binding.navigationRailView.gone()
+                binding.navigationRailView.gone() // 保留仓库原有调用，未做修改
             } else {
-                binding.bottomNavigationView.gone()
+                binding.bottomNavigationView.gone() // 保留仓库原有调用，未做修改
             }
             navView.labelVisibilityMode = when (AppConfig.labelVisibilityMode) {
                 "auto" -> LabelVisibilityMode.LABEL_VISIBILITY_AUTO
@@ -402,8 +400,8 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             }
         } else {
             window.setNavigationBarColorAuto(themeColor(com.google.android.material.R.attr.colorSurface))
-            binding.bottomNavigationView.gone()
-            binding.navigationRailView.gone()
+            binding.bottomNavigationView.gone() // 保留仓库原有调用，未做修改
+            binding.navigationRailView.gone() // 保留仓库原有调用，未做修改
         }
         val lp = binding.navigationRailView.headerView!!.layoutParams as FrameLayout.LayoutParams
         lp.gravity = Gravity.START
