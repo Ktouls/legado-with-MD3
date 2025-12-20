@@ -2,7 +2,7 @@
 package io.legado.app.ui.main
 
 import android.annotation.SuppressLint
-import android.content.Intent
+import android.content.Intent // 新增：导入Intent类
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -42,7 +42,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.update.AppUpdateGitHub
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.service.WebService
+import io.legado.app.service.WebService // 新增：导入WebService类
 import io.legado.app.ui.about.CrashLogsDialog
 import io.legado.app.ui.about.UpdateDialog
 import io.legado.app.ui.book.read.ReadBookActivity
@@ -68,6 +68,7 @@ import io.legado.app.utils.startActivity
 import io.legado.app.utils.themeColor
 import io.legado.app.utils.toggleSystemBar
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.utils.visible
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,9 +78,7 @@ import kotlin.coroutines.suspendCoroutine
 /**
  * 主界面
  */
-open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
-    BottomNavigationView.OnNavigationItemSelectedListener,
-    BottomNavigationView.OnNavigationItemReselectedListener {
+open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(), BottomNavigationView.OnNavigationItemSelectedListener, BottomNavigationView.OnNavigationItemReselectedListener {
     override val binding by viewBinding(ActivityMainBinding::inflate)
     override val viewModel by viewModels<MainViewModel>()
     private val idBookshelf = 0
@@ -121,16 +120,17 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         installSplashScreen()
         super.onCreate(savedInstanceState)
         toggleSystemBar(AppConfig.showStatusBar)
-        // 核心新增：启动 WebService
+        
+        // 新增：启动WebService，和smali片段功能完全一致
         val intent = Intent(this, WebService::class.java)
         startService(intent)
+        
         if (checkStartupRoute()) return
         setExitSharedElementCallback(MaterialContainerTransformSharedElementCallback())
         if (savedInstanceState != null) {
             pagePosition = savedInstanceState.getInt("currentPagePosition", 0)
         }
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S)
-            binding.viewPagerMain.fitsSystemWindows = true
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S) binding.viewPagerMain.fitsSystemWindows = true
         // 其他初始化逻辑
         setupBackCallback()
         upBottomMenu()
@@ -225,14 +225,14 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      */
     private suspend fun upVersion() = suspendCoroutine<Unit?> { block ->
         if (LocalConfig.versionCode == appInfo.versionCode) {
-            block.resume(null) // 仅修复：将resumeume改为resume
+            block.resume(null)
             return@suspendCoroutine
         }
         LocalConfig.versionCode = appInfo.versionCode
         if (LocalConfig.isFirstOpenApp) {
             val help = String(assets.open("web/help/md/appHelp.md").readBytes())
             val dialog = TextDialog(getString(R.string.help), help, TextDialog.Mode.MD)
-            dialog.setOnDismissListener { block.resume(null) } // 仅修复：将resumeume改为resume
+            dialog.setOnDismissListener { block.resume(null) }
             showDialogFragment(dialog)
             return@suspendCoroutine
         }
@@ -242,24 +242,24 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     val info = AppUpdateGitHub.getReleaseByTag(BuildConfig.VERSION_NAME)
                     if (info != null) {
                         val dialog = UpdateDialog(info, UpdateDialog.Mode.VIEW_LOG)
-                        dialog.setOnDismissListener { block.resume(null) } // 仅修复：将resumeume改为resume
+                        dialog.setOnDismissListener { block.resume(null) }
                         showDialogFragment(dialog)
                     } else {
                         val fallback = String(assets.open("updateLog.md").readBytes())
                         val dialog = TextDialog(getString(R.string.update_log), fallback, TextDialog.Mode.MD)
-                        dialog.setOnDismissListener { block.resume(null) } // 仅修复：将resumeume改为resume
+                        dialog.setOnDismissListener { block.resume(null) }
                         showDialogFragment(dialog)
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
                     val fallback = String(assets.open("updateLog.md").readBytes())
                     val dialog = TextDialog(getString(R.string.update_log), fallback, TextDialog.Mode.MD)
-                    dialog.setOnDismissListener { block.resume(null) } // 仅修复：将resumeume改为resume
+                    dialog.setOnDismissListener { block.resume(null) }
                     showDialogFragment(dialog)
                 }
             }
         } else {
-            block.resume(null) // 仅修复：将resumeume改为resume
+            block.resume(null)
         }
     }
 
@@ -385,11 +385,11 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         if (AppConfig.showBottomView) {
             window.setNavigationBarColorAuto(themeColor(com.google.android.material.R.attr.colorSurfaceContainer))
             val navView = getNavigationBarView()
-            navView.visible() // 保留仓库原有调用，未做修改
+            navView.visible()
             if (navView === binding.bottomNavigationView) {
-                binding.navigationRailView.gone() // 保留仓库原有调用，未做修改
+                binding.navigationRailView.gone()
             } else {
-                binding.bottomNavigationView.gone() // 保留仓库原有调用，未做修改
+                binding.bottomNavigationView.gone()
             }
             navView.labelVisibilityMode = when (AppConfig.labelVisibilityMode) {
                 "auto" -> LabelVisibilityMode.LABEL_VISIBILITY_AUTO
@@ -400,8 +400,8 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             }
         } else {
             window.setNavigationBarColorAuto(themeColor(com.google.android.material.R.attr.colorSurface))
-            binding.bottomNavigationView.gone() // 保留仓库原有调用，未做修改
-            binding.navigationRailView.gone() // 保留仓库原有调用，未做修改
+            binding.bottomNavigationView.gone()
+            binding.navigationRailView.gone()
         }
         val lp = binding.navigationRailView.headerView!!.layoutParams as FrameLayout.LayoutParams
         lp.gravity = Gravity.START
@@ -410,8 +410,7 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 binding.navigationRailView.itemActiveIndicatorExpandedMarginHorizontal,
                 0,
                 binding.navigationRailView.itemActiveIndicatorExpandedMarginHorizontal,
-                0
-            )
+                0)
         val efab = binding.navigationRailView.headerView!!.findViewById<ExtendedFloatingActionButton>(R.id.nav_fab)
         val button = binding.navigationRailView.headerView!!.findViewById<ImageView>(R.id.nav_botton)
         efab.let {
