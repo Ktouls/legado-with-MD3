@@ -10,6 +10,7 @@ import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.MenuItem
 import android.view.MotionEvent
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.activity.OnBackPressedCallback
@@ -80,10 +81,8 @@ import kotlin.coroutines.suspendCoroutine
 open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     BottomNavigationView.OnNavigationItemSelectedListener,
     BottomNavigationView.OnNavigationItemReselectedListener {
-
     override val binding by viewBinding(ActivityMainBinding::inflate)
     override val viewModel by viewModels<MainViewModel>()
-
     private val idBookshelf = 0
     private val idBookshelf1 = 11
     private val idBookshelf2 = 12
@@ -92,14 +91,12 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private val idExplore = 1
     private val idRss = 2
     private val idMy = 3
-
     private var bookshelfReselected: Long = 0
     private var exploreReselected: Long = 0
     private var pagePosition = 0
     private val fragmentMap = hashMapOf<Int, Fragment>()
     private var bottomMenuCount = 4
     private val realPositions = arrayOf(idBookshelf, idExplore, idRss, idMy)
-
     private val adapter by lazy { TabFragmentPageAdapter(this) }
     private lateinit var backCallback: OnBackPressedCallback
     private val badge by lazy { getNavigationBarView().getOrCreateBadge(R.id.menu_bookshelf) }
@@ -125,11 +122,9 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         installSplashScreen()
         super.onCreate(savedInstanceState)
         toggleSystemBar(AppConfig.showStatusBar)
-
         // 核心新增：启动 WebService
         val intent = Intent(this, WebService::class.java)
         startService(intent)
-
         if (checkStartupRoute()) return
         setExitSharedElementCallback(MaterialContainerTransformSharedElementCallback())
         if (savedInstanceState != null) {
@@ -248,7 +243,7 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     val info = AppUpdateGitHub.getReleaseByTag(BuildConfig.VERSION_NAME)
                     if (info != null) {
                         val dialog = UpdateDialog(info, UpdateDialog.Mode.VIEW_LOG)
-                        dialog.setOnDismissListener { block.resume(null) }
+                        dialog.setOnDismissListener { block.resumeume(null) }
                         showDialogFragment(dialog)
                     } else {
                         val fallback = String(assets.open("updateLog.md").readBytes())
@@ -391,7 +386,8 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         if (AppConfig.showBottomView) {
             window.setNavigationBarColorAuto(themeColor(com.google.android.material.R.attr.colorSurfaceContainer))
             val navView = getNavigationBarView()
-            navView.visible()
+            // 修复：替换visible()为原生代码
+            navView.visibility = View.VISIBLE
             if (navView === binding.bottomNavigationView) {
                 binding.navigationRailView.gone()
             } else {
@@ -510,7 +506,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private inner class TabFragmentPageAdapter(
         activity: FragmentActivity
     ) : FragmentStateAdapter(activity) {
-
         override fun getItemCount(): Int = bottomMenuCount
 
         override fun createFragment(position: Int): Fragment {
