@@ -1,8 +1,8 @@
 @file:Suppress("DEPRECATION")
-
 package io.legado.app.ui.main
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -42,6 +42,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.update.AppUpdateGitHub
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.service.WebService
 import io.legado.app.ui.about.CrashLogsDialog
 import io.legado.app.ui.about.UpdateDialog
 import io.legado.app.ui.book.read.ReadBookActivity
@@ -67,7 +68,6 @@ import io.legado.app.utils.startActivity
 import io.legado.app.utils.themeColor
 import io.legado.app.utils.toggleSystemBar
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import io.legado.app.utils.visible
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -83,6 +83,7 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
     override val binding by viewBinding(ActivityMainBinding::inflate)
     override val viewModel by viewModels<MainViewModel>()
+
     private val idBookshelf = 0
     private val idBookshelf1 = 11
     private val idBookshelf2 = 12
@@ -91,19 +92,17 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private val idExplore = 1
     private val idRss = 2
     private val idMy = 3
+
     private var bookshelfReselected: Long = 0
     private var exploreReselected: Long = 0
     private var pagePosition = 0
     private val fragmentMap = hashMapOf<Int, Fragment>()
     private var bottomMenuCount = 4
     private val realPositions = arrayOf(idBookshelf, idExplore, idRss, idMy)
-    private val adapter by lazy {
-        TabFragmentPageAdapter(this)
-    }
+
+    private val adapter by lazy { TabFragmentPageAdapter(this) }
     private lateinit var backCallback: OnBackPressedCallback
-    private val badge by lazy {
-        getNavigationBarView().getOrCreateBadge(R.id.menu_bookshelf)
-    }
+    private val badge by lazy { getNavigationBarView().getOrCreateBadge(R.id.menu_bookshelf) }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -126,9 +125,13 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         installSplashScreen()
         super.onCreate(savedInstanceState)
         toggleSystemBar(AppConfig.showStatusBar)
+
+        // 核心新增：启动 WebService
+        val intent = Intent(this, WebService::class.java)
+        startService(intent)
+
         if (checkStartupRoute()) return
         setExitSharedElementCallback(MaterialContainerTransformSharedElementCallback())
-
         if (savedInstanceState != null) {
             pagePosition = savedInstanceState.getInt("currentPagePosition", 0)
         }
@@ -207,10 +210,12 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 finish()
                 true
             }
+
             getPrefBoolean(PreferKey.defaultToRead) -> {
                 startActivity<ReadBookActivity>()
                 false
             }
+
             else -> false
         }
     }
@@ -267,7 +272,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     /**
      * 设置本地密码
      */
-
     private fun notifyAppCrash() {
         if (!LocalConfig.appCrash || BuildConfig.DEBUG) {
             return
@@ -289,8 +293,9 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             return
         }
         lifecycleScope.launch {
-            val lastBackupFile =
-                withContext(IO) { AppWebDav.lastBackUp().getOrNull() } ?: return@launch
+            val lastBackupFile = withContext(IO) {
+                AppWebDav.lastBackUp().getOrNull()
+            } ?: return@launch
             if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
                 LocalConfig.lastBackup = lastBackupFile.lastModify
                 alert(R.string.restore, R.string.webdav_after_local_restore_confirm) {
@@ -337,7 +342,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             badge.isVisible = it > 0
             badge.number = it
         }
-
         observeEvent<Boolean>(EventBus.NOTIFY_MAIN) {
             binding.apply {
                 upBottomMenu()
@@ -355,7 +359,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val tabletInterface = AppConfig.tabletInterface
         val orientation = resources.configuration.orientation
         val smallestWidthDp = resources.configuration.smallestScreenWidthDp
-
         val useRail = when (tabletInterface) {
             "always" -> true
             "landscape" -> orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -363,19 +366,15 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             "auto" -> smallestWidthDp >= 600
             else -> false
         }
-
         return if (useRail) binding.navigationRailView else binding.bottomNavigationView
     }
-
 
     @SuppressLint("NotifyDataSetChanged")
     private fun upBottomMenu() {
         val navView = getNavigationBarView()
         val menu = navView.menu
-
         menu.findItem(R.id.menu_discovery).isVisible = AppConfig.showDiscovery
         menu.findItem(R.id.menu_rss).isVisible = AppConfig.showRSS
-
         var index = 0
         if (AppConfig.showDiscovery) {
             index++
@@ -388,9 +387,7 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         index++
         realPositions[index] = idMy
         bottomMenuCount = index + 1
-
         binding.viewPagerMain.adapter?.notifyDataSetChanged()
-
         if (AppConfig.showBottomView) {
             window.setNavigationBarColorAuto(themeColor(com.google.android.material.R.attr.colorSurfaceContainer))
             val navView = getNavigationBarView()
@@ -400,7 +397,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             } else {
                 binding.bottomNavigationView.gone()
             }
-
             navView.labelVisibilityMode = when (AppConfig.labelVisibilityMode) {
                 "auto" -> LabelVisibilityMode.LABEL_VISIBILITY_AUTO
                 "selected" -> LabelVisibilityMode.LABEL_VISIBILITY_SELECTED
@@ -408,29 +404,22 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 "unlabeled" -> LabelVisibilityMode.LABEL_VISIBILITY_UNLABELED
                 else -> LabelVisibilityMode.LABEL_VISIBILITY_AUTO
             }
-
         } else {
             window.setNavigationBarColorAuto(themeColor(com.google.android.material.R.attr.colorSurface))
             binding.bottomNavigationView.gone()
             binding.navigationRailView.gone()
         }
-
-        val lp =
-            binding.navigationRailView.headerView!!.layoutParams as FrameLayout.LayoutParams
+        val lp = binding.navigationRailView.headerView!!.layoutParams as FrameLayout.LayoutParams
         lp.gravity = Gravity.START
-
         binding.navigationRailView.headerView!!
             .setPadding(
                 binding.navigationRailView.itemActiveIndicatorExpandedMarginHorizontal,
                 0,
                 binding.navigationRailView.itemActiveIndicatorExpandedMarginHorizontal,
-                0)
-
-        val efab =
-            binding.navigationRailView.headerView!!.findViewById<ExtendedFloatingActionButton>(R.id.nav_fab)
-        val button =
-            binding.navigationRailView.headerView!!.findViewById<ImageView>(R.id.nav_botton)
-
+                0
+            )
+        val efab = binding.navigationRailView.headerView!!.findViewById<ExtendedFloatingActionButton>(R.id.nav_fab)
+        val button = binding.navigationRailView.headerView!!.findViewById<ImageView>(R.id.nav_botton)
         efab.let {
             if (LocalConfig.navExtended) {
                 it.isExtended = true
@@ -442,11 +431,9 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 button.setImageResource(R.drawable.ic_menu)
             }
         }
-
         efab.setOnClickListener {
             startActivity<SearchActivity>()
         }
-
         button.setOnClickListener {
             efab.let { it1 ->
                 if (it1.isExtended) {
@@ -461,17 +448,14 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 LocalConfig.navExtended = it1.isExtended
             }
         }
-
         navView.setOnItemSelectedListener { onNavigationItemSelected(it) }
         navView.setOnItemReselectedListener { onNavigationItemReselected(it) }
-
         binding.viewPagerMain.post {
             val currentPosition = if (pagePosition < bottomMenuCount) pagePosition else 0
             binding.viewPagerMain.setCurrentItem(currentPosition, false)
             getNavigationBarView().menu[currentPosition].isChecked = true
             updateBackCallbackState()
         }
-
     }
 
     private fun upHomePage() {
@@ -539,7 +523,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 idRss -> RssFragment(position)
                 else -> MyFragment(position)
             }
-
             fragmentMap[getFragmentId(position)] = fragment
             return fragment
         }
@@ -551,9 +534,7 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         override fun containsItem(itemId: Long): Boolean {
             return (0 until bottomMenuCount).any { getItemId(it) == itemId }
         }
-
     }
-
 }
 
 class LauncherW : MainActivity()
@@ -564,5 +545,3 @@ class Launcher4 : MainActivity()
 class Launcher5 : MainActivity()
 class Launcher6 : MainActivity()
 class Launcher0 : MainActivity()
-
-
