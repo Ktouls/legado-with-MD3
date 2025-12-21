@@ -143,10 +143,15 @@ jobs:
         run: |
           echo "清空18PlusList.txt"
           echo "">$GITHUB_WORKSPACE/app/src/main/assets/18PlusList.txt
-      - name: Release Apk Sign
+      - name: Release Apk Sign (PKCS12 适配)
         run: |
-          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > $GITHUB_WORKSPACE/app/my-release-key.jks
-          echo "RELEASE_STORE_FILE=my-release-key.jks" >> $GITHUB_WORKSPACE/gradle.properties
+          # 关键修改1：解码为 PKCS12 格式（.p12 后缀）
+          echo "${{ secrets.SIGNING_KEY }}" | base64 -d > $GITHUB_WORKSPACE/app/my-release-key.p12
+          # 关键修改2：配置签名文件路径（改为 .p12）
+          echo "RELEASE_STORE_FILE=my-release-key.p12" >> $GITHUB_WORKSPACE/gradle.properties
+          # 关键修改3：新增 PKCS12 类型配置
+          echo "RELEASE_STORE_TYPE=PKCS12" >> $GITHUB_WORKSPACE/gradle.properties
+          # 保持原有密码/别名配置不变
           echo "RELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_WORKSPACE/gradle.properties
           echo "RELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_WORKSPACE/gradle.properties
           echo "RELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_WORKSPACE/gradle.properties
@@ -324,7 +329,7 @@ jobs:
           prerelease: ${{ needs.prepare.outputs.is_release == 'true' && 'false' || 'true' }}
 
       - name: 下载所有 APK Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: '*-apk'
           path: artifacts
