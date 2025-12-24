@@ -1,5 +1,4 @@
 package io.legado.app.service
-
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.net.Uri
@@ -68,15 +67,12 @@ import kotlin.coroutines.coroutineContext
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
-
     private val exoPlayer: ExoPlayer by lazy {
         ExoPlayer.Builder(this).build()
     }
-
     private val ttsFolderPath: String by lazy {
         cacheDir.absolutePath + File.separator + "httpTTS" + File.separator
     }
-
     private val cache by lazy {
         SimpleCache(
             File(cacheDir, "httpTTS_cache"),
@@ -84,16 +80,13 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             StandaloneDatabaseProvider(appCtx)
         )
     }
-
     private val cacheDataSinkFactory by lazy {
         CacheDataSink.Factory()
             .setCache(cache)
     }
-
     private val loadErrorHandlingPolicy by lazy {
         CustomLoadErrorHandlingPolicy()
     }
-
     private var speechRate: Int = AppConfig.speechRatePlay + 5
     private var downloadTask: Coroutine<*>? = null
     private var playIndexJob: Job? = null
@@ -199,7 +192,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         val contentList = textChapter.getNeedReadAloud(0, readAloudByPage, 0, 1)
             .splitToSequence("\n")
             .filter { it.isNotEmpty() }
-            .take(10)
+            .take(100) // 核心修改：非流式播放缓存下一章第100句
             .toList()
         contentList.forEach { content ->
             currentCoroutineContext().ensureActive()
@@ -268,7 +261,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         val contentList = textChapter.getNeedReadAloud(0, readAloudByPage, 0, 1)
             .splitToSequence("\n")
             .filter { it.isNotEmpty() }
-            .take(10)
+            .take(10) // 流式播放保持原10句缓存
             .toList()
         contentList.forEach { content ->
             currentCoroutineContext().ensureActive()
@@ -334,7 +327,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     speakText = speakText,
                     speakSpeed = speechRate,
                     source = httpTts,
-                    readTimeout = 600 * 1000L, // 修改1：300秒 → 600秒
+                    readTimeout = 300 * 1000L, // 已改：600秒 → 300秒
                     coroutineContext = currentCoroutineContext()
                 )
                 var response = analyzeUrl.getResponseAwait()
@@ -371,8 +364,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     }
                     is SocketTimeoutException, is ConnectException -> {
                         downloadErrorNo++
-                        if (downloadErrorNo > 1) { // 修改2：重试5次 → 1次
-                            val msg = "tts超时或连接错误超过1次\n${e.localizedMessage}"
+                        if (downloadErrorNo > 5) { // 已改：重试5次（原1次）
+                            val msg = "tts超时或连接错误超过5次\n${e.localizedMessage}"
                             AppLog.put(msg, e, true)
                             throw e
                         }
@@ -382,8 +375,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         val msg = "tts下载错误\n${e.localizedMessage}"
                         AppLog.put(msg, e)
                         e.printOnDebug()
-                        if (downloadErrorNo > 1) { // 修改3：重试5次 → 1次
-                            val msg1 = "TTS服务器连续1次错误，已暂停阅读。"
+                        if (downloadErrorNo > 5) { // 已改：重试5次（原1次）
+                            val msg1 = "TTS服务器连续5次错误，已暂停阅读。"
                             AppLog.put(msg1, e, true)
                             throw e
                         } else {
@@ -424,14 +417,11 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         }
     }
 
-    /**
-     * 移除缓存文件
-     */
     private fun removeCacheFile() {
         val titleMd5 = MD5Utils.md5Encode16(textChapter?.title ?: "")
         FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach {
             val isSilentSound = it.length() == 2160L
-            if ((!it.name.startsWith(titleMd5) && System.currentTimeMillis() - it.lastModified() > 1800000) || isSilentSound ) { // 修改4：10分钟(600000ms) → 30分钟(1800000ms)
+            if ((!it.name.startsWith(titleMd5) && System.currentTimeMillis() - it.lastModified() > 1800000) || isSilentSound ) {
                 FileUtils.delete(it.absolutePath)
             }
         }
@@ -483,9 +473,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         }
     }
 
-    /**
-     * 更新朗读速度
-     */
     override fun upSpeechRate(reset: Boolean) {
         downloadTask?.cancel()
         exoPlayer.stop()
@@ -500,20 +487,14 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     override fun onPlaybackStateChanged(playbackState: Int) {
         super.onPlaybackStateChanged(playbackState)
         when (playbackState) {
-            Player.STATE_IDLE -> {
-                // 空闲
-            }
-            Player.STATE_BUFFERING -> {
-                // 缓冲中
-            }
+            Player.STATE_IDLE -> {}
+            Player.STATE_BUFFERING -> {}
             Player.STATE_READY -> {
-                // 准备好
                 if (pause) return
                 exoPlayer.play()
                 upPlayPos()
             }
             Player.STATE_ENDED -> {
-                // 结束
                 playErrorNo = 0
                 updateNextPos()
                 exoPlayer.stop()
@@ -547,9 +528,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         AppLog.put("朗读错误\n${contentList[nowSpeak]}", error)
         deleteCurrentSpeakFile()
         playErrorNo++
-        if (playErrorNo >= 1) { // 修改5：朗读连续5次错误 → 1次
-            toastOnUi("朗读连续1次错误, 最后一次错误代码(${error.localizedMessage})")
-            AppLog.put("朗读连续1次错误, 最后一次错误代码(${error.localizedMessage})", error)
+        if (playErrorNo >= 5) { // 已改：朗读连续5次错误暂停（原1次）
+            toastOnUi("朗读连续5次错误, 最后一次错误代码(${error.localizedMessage})")
+            AppLog.put("朗读连续5次错误, 最后一次错误代码(${error.localizedMessage})", error)
             pauseReadAloud()
         } else {
             if (exoPlayer.hasNextMediaItem()) {
