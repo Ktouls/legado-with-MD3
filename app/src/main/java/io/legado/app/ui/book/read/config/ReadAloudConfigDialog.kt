@@ -18,8 +18,6 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.prefs.SwitchPreference
 import io.legado.app.lib.prefs.fragment.PreferenceFragment
-//import io.legado.app.lib.theme.backgroundColor
-//import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.ReadAloud
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.utils.GSON
@@ -27,7 +25,6 @@ import io.legado.app.utils.StringUtils
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.showDialogFragment
-// 【新增引用】为了显示清理成功的提示
 import io.legado.app.utils.toastOnUi
 
 class ReadAloudConfigDialog : BasePrefDialogFragment() {
@@ -39,7 +36,6 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
         savedInstanceState: Bundle?
     ): View {
         val view = LinearLayout(requireContext())
-        //view.setBackgroundColor(requireContext().backgroundColor)
         view.id = R.id.tag1
         container?.addView(view)
         return view
@@ -77,22 +73,14 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                 it.isEnabled = AppConfig.ignoreAudioFocus
             }
 
-            // 【新增代码】绑定清理缓存按钮事件
+            // 绑定清理缓存按钮事件 (保持你之前的逻辑)
             findPreference<Preference>("clear_cache")?.let {
-                it.summary = getString(R.string.clear_cache)
                 it.setOnPreferenceClickListener {
-                    // 调用 AppConfig 中的万能清理函数 (自动处理外部存储)
                     AppConfig.clearTtsCache()
-                    // 弹出提示
                     toastOnUi("音频缓存已清理")
                     true
                 }
             }
-        }
-
-        override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-            super.onViewCreated(view, savedInstanceState)
-            //listView.setEdgeEffectColor(primaryColor)
         }
 
         override fun onResume() {
@@ -109,6 +97,12 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
             when (preference.key) {
                 PreferKey.ttsEngine -> showDialogFragment(SpeakEngineDialog())
                 "sysTtsConfig" -> IntentHelp.openTTSSetting()
+                
+                // 【核心修改】点击“背景音乐设置”时，弹出 BGM 控制面板
+                "open_bgm_config" -> {
+                    showDialogFragment(BgmConfigDialog())
+                    return true
+                }
             }
             return super.onPreferenceTreeClick(preference)
         }
