@@ -1008,6 +1008,21 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         // 清理数据库索引 (可选，建议一起清，防止索引还在但文件没了)
         FileUtils.delete(baseDir.absolutePath + File.separator + "httpTTS_cache")
     }
+    // ================= BGM 背景音乐配置 Start =================
+
+    var isBgmEnabled: Boolean
+        get() = appCtx.getPrefBoolean("is_bgm_enabled", false)
+        set(value) = appCtx.putPrefBoolean("is_bgm_enabled", value)
+
+    var bgmUri: String
+        get() = appCtx.getPrefString("bgm_uri", "") ?: ""
+        set(value) = appCtx.putPrefString("bgm_uri", value)
+
+    var bgmVolume: Int
+        get() = appCtx.getPrefInt("bgm_volume", 30) // 默认30%音量
+        set(value) = appCtx.putPrefInt("bgm_volume", value)
+
+    // ================= BGM 背景音乐配置 End =================
 
     // ================= 自定义功能区域 End =================
 
