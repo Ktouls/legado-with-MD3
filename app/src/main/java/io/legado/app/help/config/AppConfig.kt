@@ -549,10 +549,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val readAloudByMediaButton
         get() = appCtx.getPrefBoolean(PreferKey.readAloudByMediaButton, false)
 
-    // 【补全】朗读标题开关，修复 HttpReadAloudService 报错
-    val readAloudTitle: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.readAloudTitle, true)
-
     val replaceEnableDefault get() = appCtx.getPrefBoolean(PreferKey.replaceEnableDefault, true)
 
     val webDavDir get() = appCtx.getPrefString(PreferKey.webDavDir, "legado")
@@ -690,7 +686,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             return maxLine
         }
         set(value) {
-            appCtx.getPrefInt(PreferKey.sourceEditMaxLine, value)
+            appCtx.putPrefInt(PreferKey.sourceEditMaxLine, value)
         }
 
     var audioPlayUseWakeLock: Boolean
@@ -857,7 +853,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var pureBlack
         get() = appCtx.getPrefBoolean(PreferKey.pureBlack, false)
         set(value) {
-            // 【修正】使用 putPrefBoolean 而不是 getPrefBoolean
             appCtx.putPrefBoolean(PreferKey.pureBlack, value)
         }
 
@@ -963,6 +958,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             val minutes = str?.toLongOrNull() ?: 10L
             return minutes * 60 * 1000L
         }
+
+    // 3. 【补全修复点】朗读标题开关，修复 HttpReadAloudService 报错
+    val readAloudTitle: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.readAloudTitle, true)
 
     fun clearTtsCache() {
         val baseDir = appCtx.externalCacheDir ?: appCtx.cacheDir
