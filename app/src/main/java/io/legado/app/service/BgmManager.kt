@@ -104,44 +104,44 @@ object BgmManager {
         }
         if (playlist.isNotEmpty() && exoPlayer?.isPlaying == false) {
             exoPlayer?.play()
-            // 执行淡入：从当前音量到设置的音量
+            // 执行淡入
             animateVolume(AppConfig.bgmVolume / 100f)
         }
     }
 
     fun pause() {
         if (exoPlayer?.isPlaying == true) {
-            // 执行淡出：淡出到 0 后再执行暂停
-            animateVolume(0f) {
+            // 使用具名参数确保回调正确执行
+            animateVolume(0f, onComplete = {
                 exoPlayer?.pause()
-            }
+            })
         }
     }
 
     fun next() {
-        // 切歌时先淡出 -> 切换 -> 再淡入
-        animateVolume(0f， 300L) {
+        // 修复点 1：将全角逗号改为半角逗号
+        // 修复点 2：使用具名参数 duration 和 onComplete
+        animateVolume(0f, duration = 300L, onComplete = {
             if (exoPlayer?.hasNextMediaItem() == true) {
                 exoPlayer?.seekToNextMediaItem()
             } else {
                 exoPlayer?.seekToDefaultPosition(0)
             }
-            animateVolume(AppConfig.bgmVolume / 100f, 500L)
-        }
+            animateVolume(AppConfig.bgmVolume / 100f, duration = 500L)
+        })
     }
 
     fun prev() {
-        animateVolume(0f, 300L) {
+        animateVolume(0f, duration = 300L, onComplete = {
             if (exoPlayer?.hasPreviousMediaItem() == true) {
                 exoPlayer?.seekToPreviousMediaItem()
             }
-            animateVolume(AppConfig.bgmVolume / 100f, 500L)
-        }
+            animateVolume(AppConfig.bgmVolume / 100f, duration = 500L)
+        })
     }
 
     fun setVolume(progress: Int) {
         AppConfig.bgmVolume = progress
-        // 拖动进度条时直接设置，不使用动画，保证响应速度
         fadeJob?.cancel() 
         exoPlayer?.volume = progress / 100f
     }
