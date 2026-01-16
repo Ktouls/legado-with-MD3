@@ -20,7 +20,6 @@ import io.legado.app.utils.removePref
 import io.legado.app.utils.sysConfiguration
 import io.legado.app.utils.toastOnUi
 import splitties.init.appCtx
-// 【新增引用】为了支持文件清理操作
 import java.io.File
 import io.legado.app.utils.FileUtils
 
@@ -213,12 +212,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val textSelectAble: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.textSelectAble, true)
 
-//    val isTransparentStatusBar: Boolean
-//        get() = appCtx.getPrefBoolean(PreferKey.transparentStatusBar, true)
-//
-//    val immNavigationBar: Boolean
-//        get() = appCtx.getPrefBoolean(PreferKey.immNavigationBar, true)
-
     val screenOrientation: String?
         get() = appCtx.getPrefString(PreferKey.screenOrientation)
 
@@ -276,7 +269,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefString(PreferKey.bookExportFileName, value)
         }
 
-    // 保存 自定义导出章节模式 文件名js表达式
     var episodeExportFileName: String?
         get() = appCtx.getPrefString(PreferKey.episodeExportFileName, "")
         set(value) {
@@ -299,7 +291,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             }
         }
 
-    // 书籍保存位置
     var defaultBookTreeUri: String?
         get() = appCtx.getPrefString(PreferKey.defaultBookTreeUri)
         set(value) {
@@ -343,7 +334,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefLong(PreferKey.remoteServerId, value)
         }
 
-    // 添加本地选择的目录
     var importBookPath: String?
         get() = appCtx.getPrefString("importBookPath")
         set(value) {
@@ -391,15 +381,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.systemTypefaces, value)
         }
 
-//    var elevation: Int
-//        get() = if (isEInkMode) 0 else appCtx.getPrefInt(
-//            PreferKey.barElevation,
-//            AppConst.sysElevation
-//        )
-//        set(value) {
-//            appCtx.putPrefInt(PreferKey.barElevation, value)
-//        }
-
     var readUrlInBrowser: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.readUrlOpenInBrowser)
         set(value) {
@@ -435,7 +416,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.exportNoChapterName, value)
         }
 
-    // 是否启用自定义导出 default->false
     var enableCustomExport: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.enableCustomExport, false)
         set(value) {
@@ -568,6 +548,10 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val readAloudByMediaButton
         get() = appCtx.getPrefBoolean(PreferKey.readAloudByMediaButton, false)
+
+    // 【补全】朗读标题开关，修复 HttpReadAloudService 报错
+    val readAloudTitle: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.readAloudTitle, true)
 
     val replaceEnableDefault get() = appCtx.getPrefBoolean(PreferKey.replaceEnableDefault, true)
 
@@ -706,7 +690,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             return maxLine
         }
         set(value) {
-            appCtx.putPrefInt(PreferKey.sourceEditMaxLine, value)
+            appCtx.getPrefInt(PreferKey.sourceEditMaxLine, value)
         }
 
     var audioPlayUseWakeLock: Boolean
@@ -747,11 +731,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.firebaseEnable, value)
         }
 
-    //跳转到漫画界面不使用富文本模式
     val showMangaUi: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.showMangaUi, true)
 
-    //禁用漫画缩放
     var disableMangaScale: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.disableMangaScale, true)
         set(value) {
@@ -776,35 +758,30 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefString(PreferKey.titleBarMode, value)
         }
 
-    //漫画预加载数量
     var mangaPreDownloadNum
         get() = appCtx.getPrefInt(PreferKey.mangaPreDownloadNum, 10)
         set(value) {
             appCtx.putPrefInt(PreferKey.mangaPreDownloadNum, value)
         }
 
-    //点击翻页
     var disableClickScroll
         get() = appCtx.getPrefBoolean(PreferKey.disableClickScroll, false)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.disableClickScroll, value)
         }
 
-    //漫画滚动速度
     var mangaAutoPageSpeed
         get() = appCtx.getPrefInt(PreferKey.mangaAutoPageSpeed, 3)
         set(value) {
             appCtx.putPrefInt(PreferKey.mangaAutoPageSpeed, value)
         }
 
-    //漫画页脚配置
     var mangaFooterConfig
         get() = appCtx.getPrefString(PreferKey.mangaFooterConfig, "")
         set(value) {
             appCtx.putPrefString(PreferKey.mangaFooterConfig, value)
         }
 
-    //漫画滚动方式
     var mangaScrollMode: Int
         get() = appCtx.getPrefInt(PreferKey.mangaScrollMode, MangaScrollMode.WEBTOON)
         set(value) {
@@ -823,49 +800,42 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.mangaBackground, value)
         }
 
-    //漫画滤镜
     var mangaColorFilter
         get() = appCtx.getPrefString(PreferKey.mangaColorFilter, "")
         set(value) {
             appCtx.putPrefString(PreferKey.mangaColorFilter, value)
         }
 
-    //禁用漫画内标题
     var hideMangaTitle
         get() = appCtx.getPrefBoolean(PreferKey.hideMangaTitle, false)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.hideMangaTitle, value)
         }
 
-    //开启墨水屏模式
     var enableMangaEInk
         get() = appCtx.getPrefBoolean(PreferKey.enableMangaEInk, false)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.enableMangaEInk, value)
         }
 
-    //墨水屏阈值
     var mangaEInkThreshold
         get() = appCtx.getPrefInt(PreferKey.mangaEInkThreshold, 150)
         set(value) {
             appCtx.putPrefInt(PreferKey.mangaEInkThreshold, value)
         }
 
-    //漫画灰度
     var enableMangaGray
         get() = appCtx.getPrefBoolean(PreferKey.enableMangaGray, false)
         set(value) {
             appCtx.putPrefBoolean(PreferKey.enableMangaGray, value)
         }
 
-    //条漫侧边距
     var webtoonSidePaddingDp: Int
         get() = appCtx.getPrefInt(PreferKey.webtoonSidePaddingDp, 0)
         set(value) {
             appCtx.putPrefInt(PreferKey.webtoonSidePaddingDp, value)
         }
 
-    //漫画音量键翻页
     var MangaVolumeKeyPage: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.mangaVolumeKeyPage, false)
         set(value) {
@@ -887,7 +857,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var pureBlack
         get() = appCtx.getPrefBoolean(PreferKey.pureBlack, false)
         set(value) {
-            appCtx.getPrefBoolean(PreferKey.pureBlack, value)
+            // 【修正】使用 putPrefBoolean 而不是 getPrefBoolean
+            appCtx.putPrefBoolean(PreferKey.pureBlack, value)
         }
 
     val hasLightBg: Boolean
@@ -979,35 +950,26 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     // ================= 自定义功能区域 Start =================
 
     // 1. 听书预加载数量
-    // 逻辑：从设置里读取字符串，转成数字。如果读不到，默认返回 10。
     val audioPreDownloadNum: Int
         get() {
-            // 注意：EditTextPreference 保存的是 String
             val str = appCtx.getPrefString("audioPreDownloadNum")
             return str?.toIntOrNull() ?: 10
         }
 
     // 2. 音频缓存保留时间 (返回毫秒)
-    // 逻辑：用户输入的是“分钟”，我们在这里把它乘以 60000 变成“毫秒”。
     val audioCacheCleanTime: Long
         get() {
             val str = appCtx.getPrefString("audioCacheCleanTime")
-            val minutes = str?.toLongOrNull() ?: 10L // 默认 10 分钟
+            val minutes = str?.toLongOrNull() ?: 10L
             return minutes * 60 * 1000L
         }
 
-    /**
-     * 【新增】手动清理 TTS 缓存
-     * 这个方法会自动寻找 externalCacheDir（外部存储），如果找不到再找内部。
-     * 确保和 Service 里的逻辑保持一致。
-     */
     fun clearTtsCache() {
         val baseDir = appCtx.externalCacheDir ?: appCtx.cacheDir
-        // 清理音频文件
         FileUtils.delete(baseDir.absolutePath + File.separator + "httpTTS")
-        // 清理数据库索引 (可选，建议一起清，防止索引还在但文件没了)
         FileUtils.delete(baseDir.absolutePath + File.separator + "httpTTS_cache")
     }
+
     // ================= BGM 背景音乐配置 Start =================
 
     var isBgmEnabled: Boolean
@@ -1019,7 +981,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         set(value) = appCtx.putPrefString("bgm_uri", value)
 
     var bgmVolume: Int
-        get() = appCtx.getPrefInt("bgm_volume", 30) // 默认30%音量
+        get() = appCtx.getPrefInt("bgm_volume", 30)
         set(value) = appCtx.putPrefInt("bgm_volume", value)
 
     // ================= BGM 背景音乐配置 End =================
