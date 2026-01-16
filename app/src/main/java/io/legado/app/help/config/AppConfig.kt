@@ -960,8 +960,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     // 3. 【补全修复点】朗读标题开关，修复 HttpReadAloudService 报错
-    val readAloudTitle: Boolean
+    var readAloudTitle: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.readAloudTitle, true)
+        set(value) = appCtx.putPrefBoolean(PreferKey.readAloudTitle, value)
 
     fun clearTtsCache() {
         val baseDir = appCtx.externalCacheDir ?: appCtx.cacheDir
