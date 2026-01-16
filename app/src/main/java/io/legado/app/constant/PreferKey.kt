@@ -124,7 +124,7 @@ object PreferKey {
     const val nightBrightness = "nightBrightness"
     const val expandTextMenu = "expandTextMenu"
     const val doublePageHorizontal = "doubleHorizontalPage"
-    const val readUrlOpenInBrowser = "readUrlInBrowser"
+    const val readUrlOpenInBrowser = "readUrlOpenInBrowser"
     const val defaultBookTreeUri = "defaultBookTreeUri"
     const val checkSource = "checkSource"
     const val uploadRule = "uploadRule"
@@ -228,7 +228,6 @@ object PreferKey {
     const val isPredictiveBackEnabled = "isPredictiveBackEnabled"
     const val replaceSortMode = "desc"
     const val readBarStyle = "readBarStyle"
-    //我在干什么
 
     const val disableMangaScrollAnimation = "disableMangaScrollAnimation"
     const val disableMangaCrossFade = "disableMangaCrossFade"
@@ -243,4 +242,5 @@ object PreferKey {
 
     const val showTip = "showTip"
     const val sliderVibrator = "sliderVibrator"
+    const val readAloudTitle = "readAloudTitle"
 }
