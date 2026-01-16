@@ -69,7 +69,7 @@ import kotlin.coroutines.coroutineContext
 
 /**
  * 在线朗读服务
- * 已集成：BGM 联动控制、章节标题预下载修复
+ * 已集成：BGM 联动控制、章节标题预下载修复（修正变量名与停顿逻辑）
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -150,7 +150,6 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun playStop() {
         exoPlayer.stop()
         playIndexJob?.cancel()
-        // 停止 BGM
         BgmManager.pause()
     }
 
@@ -217,7 +216,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     /**
-     * 【重要修复】常规预下载逻辑：优先下载并缓存章节标题
+     * 【修复】预下载逻辑：优先下载并缓存章节标题
      */
     private suspend fun preDownloadAudios(httpTts: HttpTTS) {
         val book = ReadBook.book ?: return
@@ -233,21 +232,20 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val contentString = getChapterContent(book, chapter)
                 val segments = mutableListOf<String>()
 
-                // 1. 如果开启了“朗读标题”，将标题插入任务首位
-                if (AppConfig.isReadAloudTitle) {
+                // 1. 处理标题：使用 AppConfig.readAloudTitle
+                if (AppConfig.readAloudTitle) {
                     segments.add(chapter.title)
                 }
 
-                // 2. 载入正文内容
+                // 2. 处理正文
                 if (!contentString.isNullOrEmpty()) {
                     segments.addAll(contentString.split("\n").filter { it.isNotEmpty() })
                 }
 
-                // 3. 执行预下载循环
+                // 3. 执行预下载
                 segments.forEach { text ->
                     currentCoroutineContext().ensureActive()
                     
-                    // 确保预下载的文件名生成逻辑与主播放逻辑一致
                     val titleMd5 = MD5Utils.md5Encode16(chapter.title)
                     val contentMd5 = MD5Utils.md5Encode16("${ReadAloud.httpTTS?.url}-|-$speechRate-|-$text")
                     val fileName = "${titleMd5}_${contentMd5}"
@@ -310,7 +308,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     /**
-     * 【重要修复】流式预下载逻辑：优先下载并缓存章节标题
+     * 【修复】流式预下载逻辑：优先下载并缓存章节标题
      */
     private suspend fun preDownloadAudiosStream(
         httpTts: HttpTTS,
@@ -330,7 +328,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val segments = mutableListOf<String>()
 
                 // 1. 处理标题
-                if (AppConfig.isReadAloudTitle) {
+                if (AppConfig.readAloudTitle) {
                     segments.add(chapter.title)
                 }
 
@@ -475,6 +473,9 @@ class HttpReadAloudService : BaseReadAloudService(),
         return null
     }
 
+    /**
+     * 生成文件名：与主播放逻辑保持高度一致
+     */
     private fun md5SpeakFileName(content: String, textChapter: TextChapter? = this.textChapter): String {
         val titleToUse = textChapter?.chapter?.title ?: "" 
         return MD5Utils.md5Encode16(titleToUse) + "_" +
@@ -531,7 +532,6 @@ class HttpReadAloudService : BaseReadAloudService(),
         kotlin.runCatching {
             playIndexJob?.cancel()
             exoPlayer.pause()
-            // 联动暂停 BGM
             BgmManager.pause()
         }
     }
@@ -543,7 +543,6 @@ class HttpReadAloudService : BaseReadAloudService(),
                 play()
             } else {
                 exoPlayer.play()
-                // 联动恢复 BGM
                 BgmManager.play()
                 upPlayPos()
             }
@@ -596,7 +595,6 @@ class HttpReadAloudService : BaseReadAloudService(),
             Player.STATE_READY -> {
                 if (pause) return
                 exoPlayer.play()
-                // 就绪播放 BGM
                 BgmManager.play()
                 upPlayPos()
             }
