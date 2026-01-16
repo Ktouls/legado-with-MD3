@@ -69,7 +69,7 @@ import kotlin.coroutines.coroutineContext
 
 /**
  * 在线朗读
- * (完美匹配版：修复文件名MD5不一致 + 修复缓存不可见 + 修复0分钟不彻底清理)
+ * (完美匹配版：集成 BGM 背景音乐控制逻辑)
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -78,7 +78,6 @@ class HttpReadAloudService : BaseReadAloudService(),
         ExoPlayer.Builder(this).build()
     }
 
-    // 【修改点1】改为外部存储，方便你查看文件，确认是否生成
     private val ttsFolderPath: String by lazy {
         val baseDir = externalCacheDir ?: cacheDir
         baseDir.absolutePath + File.separator + "httpTTS" + File.separator
@@ -109,6 +108,11 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun onCreate() {
         super.onCreate()
         exoPlayer.addListener(this)
+        // 【新增】初始化背景音乐管理器
+        BgmManager.init(this)
+        if (AppConfig.isBgmEnabled) {
+            BgmManager.loadBgmFiles()
+        }
     }
 
     override fun onDestroy() {
@@ -116,6 +120,8 @@ class HttpReadAloudService : BaseReadAloudService(),
         downloadTask?.cancel()
         exoPlayer.release()
         cache.release()
+        // 【新增】销毁服务时释放 BGM 资源
+        BgmManager.release()
         Coroutine.async {
             removeCacheFile()
         }
@@ -130,6 +136,9 @@ class HttpReadAloudService : BaseReadAloudService(),
             ReadBook.readAloud()
         } else {
             super.play()
+            // 【新增】开始播放听书时，同时开始播放 BGM
+            BgmManager.play()
+
             if (AppConfig.streamReadAloudAudio) {
                 downloadAndPlayAudiosStream()
             } else {
@@ -141,6 +150,8 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun playStop() {
         exoPlayer.stop()
         playIndexJob?.cancel()
+        // 【新增】停止听书时暂停 BGM
+        BgmManager.pause()
     }
 
     private fun updateNextPos() {
@@ -455,9 +466,6 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     /**
      * 【核心修复点】生成音频文件名
-     * 1. 之前的问题：textChapter.title 可能是 "第一章  内容" (带格式)，而数据库里是 "第一章 内容" (不带格式)。
-     * 2. 现在的做法：强制使用 textChapter.chapter.title (数据库原始标题)。
-     * 3. 结果：前台 (播放) 和后台 (下载) 用的标题来源完全一致，MD5 绝对匹配，不会再重复下载了！
      */
     private fun md5SpeakFileName(content: String, textChapter: TextChapter? = this.textChapter): String {
         val titleToUse = textChapter?.chapter?.title ?: "" // 强制取“核芯”标题
@@ -492,27 +500,17 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     /**
      * 移除缓存文件
-     * 修复逻辑：如果时间设置为0，则不再保护当前章节，退出即全删。
      */
     private fun removeCacheFile() {
         val keepTime = AppConfig.audioCacheCleanTime
-        // 只有当时间大于0时，才需要保护当前章节。如果为0，说明用户想彻底不留缓存。
         val protectCurrentChapter = keepTime > 0
         val titleMd5 = if (protectCurrentChapter) MD5Utils.md5Encode16(this.textChapter?.chapter?.title ?: "") else ""
 
         FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach {
             val isSilentSound = it.length() == 2160L
-
-            // 判断逻辑：
-            // 1. 如果是无声文件 -> 删
-            // 2. 如果保留时间设为0 -> 删 (不管是不是当前章节)
-            // 3. 如果保留时间>0 -> 保护当前章节，且只删过期的
             val shouldDelete = if (keepTime == 0L) {
-                // 模式：即听即焚 (保留时间0)
                 true
             } else {
-                // 模式：保留一段时间
-                // 条件：(不是当前章节) 且 (时间过期了)
                 !it.name.startsWith(titleMd5) && (System.currentTimeMillis() - it.lastModified() > keepTime)
             }
 
@@ -528,6 +526,8 @@ class HttpReadAloudService : BaseReadAloudService(),
         kotlin.runCatching {
             playIndexJob?.cancel()
             exoPlayer.pause()
+            // 【新增】暂停朗读时同时暂停 BGM
+            BgmManager.pause()
         }
     }
 
@@ -538,6 +538,8 @@ class HttpReadAloudService : BaseReadAloudService(),
                 play()
             } else {
                 exoPlayer.play()
+                // 【新增】恢复朗读时恢复 BGM
+                BgmManager.play()
                 upPlayPos()
             }
         }
@@ -587,23 +589,16 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun onPlaybackStateChanged(playbackState: Int) {
         super.onPlaybackStateChanged(playbackState)
         when (playbackState) {
-            Player.STATE_IDLE -> {
-                // 空闲
-            }
-
-            Player.STATE_BUFFERING -> {
-                // 缓冲中
-            }
-
+            Player.STATE_IDLE -> {}
+            Player.STATE_BUFFERING -> {}
             Player.STATE_READY -> {
-                // 准备好
                 if (pause) return
                 exoPlayer.play()
+                // 【新增】播放器就绪并开始播放时，联动播放 BGM
+                BgmManager.play()
                 upPlayPos()
             }
-
             Player.STATE_ENDED -> {
-                // 结束
                 playErrorNo = 0
                 updateNextPos()
                 exoPlayer.stop()
@@ -619,7 +614,6 @@ class HttpReadAloudService : BaseReadAloudService(),
                     exoPlayer.prepare()
                 }
             }
-
             else -> {}
         }
     }
