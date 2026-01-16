@@ -23,7 +23,8 @@ class BgmConfigDialog : BaseDialogFragment(R.layout.dialog_bgm_config) {
             binding.tvPath.text = uri.path
             BgmManager.loadBgmFiles()
             BgmManager.play()
-            updatePlayPauseIcon() // 选完文件夹刷新图标
+            // 选完直接强制显示暂停图标（因为已经开始播了）
+            binding.btnPlayPause.setIconResource(R.drawable.ic_pause_filled)
         }
     }
 
@@ -48,8 +49,13 @@ class BgmConfigDialog : BaseDialogFragment(R.layout.dialog_bgm_config) {
     private fun initView() = binding.run {
         switchBgm.setOnCheckedChangeListener { _, isChecked ->
             AppConfig.isBgmEnabled = isChecked
-            if (isChecked) BgmManager.play() else BgmManager.pause()
-            updatePlayPauseIcon() // 开关切换刷新图标
+            if (isChecked) {
+                BgmManager.play()
+                btnPlayPause.setIconResource(R.drawable.ic_pause_filled)
+            } else {
+                BgmManager.pause()
+                btnPlayPause.setIconResource(R.drawable.ic_play_filled)
+            }
         }
 
         btnSelectFolder.setOnClickListener {
@@ -68,33 +74,37 @@ class BgmConfigDialog : BaseDialogFragment(R.layout.dialog_bgm_config) {
 
         btnPrev.setOnClickListener { 
             BgmManager.prev()
-            updatePlayPauseIcon()
+            // 切换歌曲时，强制设为暂停图标（表示正在播）
+            btnPlayPause.setIconResource(R.drawable.ic_pause_filled)
         }
         
         btnNext.setOnClickListener { 
             BgmManager.next()
-            updatePlayPauseIcon()
+            btnPlayPause.setIconResource(R.drawable.ic_pause_filled)
         }
 
         btnPlayPause.setOnClickListener {
             if (BgmManager.isPlaying()) {
+                // 如果当前在播，点击后是想暂停
                 BgmManager.pause()
+                // 【核心修复】不等待状态检测，直接手动切成“播放”图标
+                it.post { btnPlayPause.setIconResource(R.drawable.ic_play_filled) }
             } else {
+                // 如果当前没播，点击后是想播放
                 BgmManager.play()
+                // 【核心修复】直接手动切成“暂停”图标
+                it.post { btnPlayPause.setIconResource(R.drawable.ic_pause_filled) }
             }
-            updatePlayPauseIcon() // 点击后立即刷新图标
         }
     }
 
     /**
-     * 根据 BgmManager 的实时状态切换 播放/暂停 图标
+     * 仅用于初始化或外部状态同步
      */
     private fun updatePlayPauseIcon() {
         if (BgmManager.isPlaying()) {
-            // 如果在播放，显示暂停图标
             binding.btnPlayPause.setIconResource(R.drawable.ic_pause_filled)
         } else {
-            // 如果没播放，显示播放图标
             binding.btnPlayPause.setIconResource(R.drawable.ic_play_filled)
         }
     }
