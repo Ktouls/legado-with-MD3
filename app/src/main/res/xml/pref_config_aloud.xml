@@ -79,7 +79,7 @@
         <io.legado.app.lib.prefs.EditTextPreference
             android:key="audioCacheCleanTime"
             android:title="音频缓存保留时间(分钟)"
-            android:summary="听书缓存文件保留多久后自动删除（单位：分钟）。输入 0 代表退出即刻清理。"
+            android:summary="听书缓存文件保留多久后自动删除，输入 0 代表退出即刻清理"
             android:defaultValue="10"
             android:inputType="number"
             android:persistent="true"
@@ -87,7 +87,7 @@
 
         <io.legado.app.lib.prefs.Preference
             android:key="open_bgm_config"
-            android:title="背景音乐 (BGM) 设置"
+            android:title="背景音乐设置"
             android:summary="为听书添加沉浸式背景音乐，支持独立音量控制"
             app:iconSpaceReserved="false" />
 
