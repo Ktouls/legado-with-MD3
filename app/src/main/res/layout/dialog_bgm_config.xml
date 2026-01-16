@@ -1,110 +1,81 @@
-<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="24dp">
+package io.legado.app.ui.book.read.config
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="背景音乐设置"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp"/>
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import io.legado.app.R
+import io.legado.app.base.BaseDialogFragment
+import io.legado.app.databinding.DialogBgmConfigBinding
+import io.legado.app.help.config.AppConfig
+import io.legado.app.service.BgmManager
+import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.utils.setLayout
+import io.legado.app.utils.viewbindingdelegate.viewBinding
 
-    <com.google.android.material.materialswitch.MaterialSwitch
-        android:id="@+id/switchBgm"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="启用 BGM"
-        android:layout_marginBottom="16dp" />
+class BgmConfigDialog : BaseDialogFragment(R.layout.dialog_bgm_config) {
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="音乐文件夹路径"
-        android:textSize="12sp"
-        android:alpha="0.7" />
+    private val binding by viewBinding(DialogBgmConfigBinding::bind)
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="16dp">
-        
-        <TextView
-            android:id="@+id/tvPath"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:text="未选择"
-            android:ellipsize="middle"
-            android:singleLine="true"/>
-            
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnSelectFolder"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="更改" />
-    </LinearLayout>
+    // 文件夹选择器
+    private val selectDir = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri ->
+            AppConfig.bgmUri = uri.toString()
+            binding.tvPath.text = uri.path
+            BgmManager.loadBgmFiles()
+            BgmManager.play()
+        }
+    }
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="BGM 独立音量"
-        android:layout_marginBottom="8dp"/>
+    override fun onStart() {
+        super.onStart()
+        setLayout(0.9f, ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-        
-        <com.google.android.material.slider.Slider
-            android:id="@+id/seekVolume"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:valueFrom="0"
-            android:valueTo="100" />
-            
-        <TextView
-            android:id="@+id/tvVolumeValue"
-            android:layout_width="48dp"
-            android:layout_height="wrap_content"
-            android:gravity="end"
-            android:text="30%"/>
-    </LinearLayout>
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        initView()
+        initData()
+    }
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginTop="16dp">
+    private fun initData() = binding.run {
+        switchBgm.isChecked = AppConfig.isBgmEnabled
+        tvPath.text = AppConfig.bgmUri.ifEmpty { "未选择文件夹" }
+        // Slider 设置当前值
+        seekVolume.value = AppConfig.bgmVolume.toFloat()
+        tvVolumeValue.text = "${AppConfig.bgmVolume}%"
+    }
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnPrev"
-            style="@style/Widget.Material3.Button.IconButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="上首" />
+    private fun initView() = binding.run {
+        switchBgm.setOnCheckedChangeListener { _, isChecked ->
+            AppConfig.isBgmEnabled = isChecked
+            if (isChecked) BgmManager.play() else BgmManager.pause()
+        }
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnPlayPause"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginHorizontal="12dp"
-            android:text="播放/暂停" />
+        btnSelectFolder.setOnClickListener {
+            selectDir.launch {
+                mode = HandleFileContract.DIR
+            }
+        }
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnNext"
-            style="@style/Widget.Material3.Button.IconButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="下首" />
-    </LinearLayout>
-</LinearLayout>
+        // 【修改点】适配 Material3 Slider 的监听器
+        seekVolume.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                val progress = value.toInt()
+                BgmManager.setVolume(progress)
+                tvVolumeValue.text = "$progress%"
+            }
+        }
+
+        btnPrev.setOnClickListener { BgmManager.prev() }
+        btnNext.setOnClickListener { BgmManager.next() }
+        btnPlayPause.setOnClickListener {
+            if (BgmManager.isPlaying()) {
+                BgmManager.pause()
+                btnPlayPause.text = "播放"
+            } else {
+                BgmManager.play()
+                btnPlayPause.text = "暂停"
+            }
+        }
+    }
+}
