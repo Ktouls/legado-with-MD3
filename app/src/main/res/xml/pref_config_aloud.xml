@@ -84,6 +84,13 @@
             android:inputType="number"
             android:persistent="true"
             app:iconSpaceReserved="false" />
-        </io.legado.app.lib.prefs.PreferenceCategory>
+
+        <io.legado.app.lib.prefs.Preference
+            android:key="open_bgm_config"
+            android:title="背景音乐 (BGM) 设置"
+            android:summary="为听书添加沉浸式背景音乐，支持独立音量控制"
+            app:iconSpaceReserved="false" />
+
+    </io.legado.app.lib.prefs.PreferenceCategory>
 
 </androidx.preference.PreferenceScreen>
