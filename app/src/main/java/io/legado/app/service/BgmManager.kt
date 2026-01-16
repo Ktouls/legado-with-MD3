@@ -61,7 +61,7 @@ object BgmManager {
                 exoPlayer?.setMediaItems(playlist)
                 exoPlayer?.prepare()
             } else {
-                toastOnUi("所选文件夹内没有找到音频文件")
+                appCtx.toastOnUi("所选文件夹内没有找到音频文件")
             }
         } catch (e: Exception) {
             e.printStackTrace()
