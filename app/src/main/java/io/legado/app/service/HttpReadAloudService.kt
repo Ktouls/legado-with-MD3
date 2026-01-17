@@ -69,10 +69,8 @@ import java.net.SocketTimeoutException
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线朗读服务 (增强修复版)
- * 已解决：
- * 1. 预下载与播放 MD5 不一致导致重复缓存的问题。
- * 2. 编译环境下 Lambda 表达式 'it' 引用及类型推断失败的问题。
+ * 在线朗读服务 (完全适配修正版)
+ * 已集成：BGM 联动、预下载 MD5 一致性修复、构建兼容性重构
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -174,7 +172,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 contentList.forEachIndexed { index, content ->
                     ensureActive()
                     if (index < nowSpeak) return@forEachIndexed
-                    var text = content.trim() // 统一去除空白符
+                    var text = content.trim() // 播放逻辑统一使用 trim
                     if (paragraphStartPos > 0 && index == nowSpeak) {
                         text = text.substring(paragraphStartPos)
                     }
@@ -214,20 +212,29 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
+    private fun getChapterContent(book: Book, chapter: BookChapter): String? {
+        return BookHelp.getContent(book, chapter)
+    }
+
     /**
-     * 【关键修复】确保显式命名 lambda 参数并确保类型推断正确
+     * 【关键修复】获取经过 Legado 替换规则处理后的文本段落
      */
     private fun getProcessedChapterSegments(book: Book, chapter: BookChapter): List<String> {
-        val rawContent = BookHelp.getContent(book, chapter) ?: return emptyList()
-        // 显式声明返回值为 String，解决 split 未解析问题
-        val processedContent: String = ContentProcessor.get(book.name, book.origin)
-            .getContent(book, chapter, rawContent) ?: ""
+        val rawContent = getChapterContent(book, chapter) ?: return emptyList()
+        // 应用 Legado 内容处理器 (替换规则、净化规则等)
+        val bookContent = ContentProcessor.get(book.name, book.origin)
+            .getContent(book, chapter, rawContent)
         
-        return processedContent.split("\n")
-            .map { segment -> segment.trim() } // 显式命名 segment
+        val processedString: String = bookContent.content
+        return processedString.split("\n")
+            .map { segment -> segment.trim() }
             .filter { segment -> segment.isNotEmpty() }
     }
 
+    /**
+     * 【核心优化】预下载后续章节音频：包含标题
+     * 已对齐 MD5 逻辑
+     */
     private suspend fun preDownloadAudios(httpTts: HttpTTS) {
         val book = ReadBook.book ?: return
         val currentIdx = ReadBook.durChapterIndex
@@ -242,15 +249,18 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val chapterTitle = chapter.title.trim()
                 val segments = mutableListOf<String>()
 
+                // 1. 加入标题
                 if (AppConfig.readAloudTitle) {
                     segments.add(chapterTitle)
                 }
 
+                // 2. 加入经过“替换规则”处理的正文
                 segments.addAll(getProcessedChapterSegments(book, chapter))
 
                 segments.forEach { text ->
                     currentCoroutineContext().ensureActive()
                     
+                    // 使用统一的 Helper 计算文件名，传入对应的章节标题
                     val fileName = getFileNameHelper(chapterTitle, text)
                     
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
@@ -451,6 +461,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                     else -> {
                         downloadErrorNo++
+                        // 【编译修复】明确引用捕获的 e
                         val msg = "tts下载错误\n${e.localizedMessage}"
                         AppLog.put(msg, e)
                         e.printOnDebug()
@@ -469,6 +480,9 @@ class HttpReadAloudService : BaseReadAloudService(),
         return null
     }
 
+    /**
+     * 【关键 Helper】文件名生成器：通过强制 trim 保证主循环和预下载 100% 对齐
+     */
     private fun getFileNameHelper(title: String, content: String): String {
         val safeTitle = title.trim()
         val safeContent = content.trim()
@@ -511,24 +525,19 @@ class HttpReadAloudService : BaseReadAloudService(),
         val currentTitle = (this.textChapter?.chapter?.title ?: "").trim()
         val titleMd5 = if (protectCurrentChapter) MD5Utils.md5Encode16(currentTitle) else ""
 
-        val fileList = FileUtils.listDirsAndFiles(ttsFolderPath)
-        fileList?.forEach { fileItem -> // 显式命名 fileItem
-            val fName = fileItem.name
-            val fSize = fileItem.length()
-            val isSilent = fSize == 2160L
-            
+        FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach { fileItem ->
+            val isSilentSound = fileItem.length() == 2160L
             val shouldDelete = if (keepTime == 0L) {
                 true
             } else {
-                !fName.startsWith(titleMd5) && (System.currentTimeMillis() - fileItem.lastModified() > keepTime)
+                !fileItem.name.startsWith(titleMd5) && (System.currentTimeMillis() - fileItem.lastModified() > keepTime)
             }
 
-            if (shouldDelete || isSilent) {
+            if (shouldDelete || isSilentSound) {
                 FileUtils.delete(fileItem.absolutePath)
             }
         }
     }
-
 
     override fun pauseReadAloud(abandonFocus: Boolean) {
         super.pauseReadAloud(abandonFocus)
@@ -632,6 +641,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         deleteCurrentSpeakFile()
         playErrorNo++
         if (playErrorNo >= 5) {
+            AppLog.put("朗读连续5次错误, 已暂停", error)
             pauseReadAloud()
         } else {
             if (exoPlayer.hasNextMediaItem()) {
