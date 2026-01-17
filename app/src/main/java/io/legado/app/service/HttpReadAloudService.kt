@@ -68,18 +68,21 @@ import java.net.SocketTimeoutException
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线朗读服务 (完全适配版)
+ * 在线朗读服务 (完全适配修正版)
  * 已集成：BGM 联动、章节标题缓存修复、文件名一致性校验
  */
 @SuppressLint("UnsafeOptInUsageError")
-class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
+class HttpReadAloudService : BaseReadAloudService(),
+    Player.Listener {
     private val exoPlayer: ExoPlayer by lazy {
         ExoPlayer.Builder(this).build()
     }
+
     private val ttsFolderPath: String by lazy {
         val baseDir = externalCacheDir ?: cacheDir
         baseDir.absolutePath + File.separator + "httpTTS" + File.separator
     }
+
     private val cache by lazy {
         val baseDir = externalCacheDir ?: cacheDir
         SimpleCache(
@@ -88,8 +91,13 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             StandaloneDatabaseProvider(appCtx)
         )
     }
-    private val cacheDataSinkFactory by lazy { CacheDataSink.Factory().setCache(cache) }
-    private val loadErrorHandlingPolicy by lazy { CustomLoadErrorHandlingPolicy() }
+    private val cacheDataSinkFactory by lazy {
+        CacheDataSink.Factory()
+            .setCache(cache)
+    }
+    private val loadErrorHandlingPolicy by lazy {
+        CustomLoadErrorHandlingPolicy()
+    }
     private var speechRate: Int = AppConfig.speechRatePlay + 5
     private var downloadTask: Coroutine<*>? = null
     private var playIndexJob: Job? = null
@@ -112,7 +120,9 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         exoPlayer.release()
         cache.release()
         BgmManager.release()
-        Coroutine.async { removeCacheFile() }
+        Coroutine.async {
+            removeCacheFile()
+        }
     }
 
     override fun play() {
@@ -125,6 +135,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         } else {
             super.play()
             BgmManager.play()
+
             if (AppConfig.streamReadAloudAudio) {
                 downloadAndPlayAudiosStream()
             } else {
@@ -156,9 +167,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             downloadTaskActiveLock.withLock {
                 ensureActive()
                 val httpTts = ReadAloud.httpTTS ?: throw NoStackTraceException("tts is null")
-                // 获取当前章节标题，用于文件名校验
-                val currentTitle = textChapter?.chapter?.title ?: ""
-
+                
                 contentList.forEachIndexed { index, content ->
                     ensureActive()
                     if (index < nowSpeak) return@forEachIndexed
@@ -166,11 +175,11 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                     if (paragraphStartPos > 0 && index == nowSpeak) {
                         text = text.substring(paragraphStartPos)
                     }
-
-                    // 统一文件名生成逻辑
+                    // 播放当前章节，使用当前标题
+                    val currentTitle = textChapter?.chapter?.title ?: ""
                     val fileName = getFileNameHelper(currentTitle, text)
+                    
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
-
                     if (speakText.isEmpty()) {
                         createSilentSound(fileName)
                     } else if (!hasSpeakFile(fileName)) {
@@ -206,6 +215,59 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         return BookHelp.getContent(book, chapter)
     }
 
+    /**
+     * 【核心优化】预下载后续章节音频：包含标题
+     */
+    private suspend fun preDownloadAudios(httpTts: HttpTTS) {
+        val book = ReadBook.book ?: return
+        val currentIdx = ReadBook.durChapterIndex
+        val limit = AppConfig.audioPreDownloadNum
+        
+        try {
+            for (i in 1..limit) {
+                currentCoroutineContext().ensureActive()
+                val targetIndex = currentIdx + i
+                val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
+                
+                val contentString = getChapterContent(book, chapter)
+                val segments = mutableListOf<String>()
+
+                // 1. 根据设置决定是否将标题加入预下载队列
+                if (AppConfig.readAloudTitle) {
+                    segments.add(chapter.title)
+                }
+
+                // 2. 加入正文
+                if (!contentString.isNullOrEmpty()) {
+                    segments.addAll(contentString.split("\n").filter { it.isNotEmpty() })
+                }
+
+                segments.forEach { text ->
+                    currentCoroutineContext().ensureActive()
+                    
+                    // 使用统一的 Helper 计算文件名，传入对应的章节标题
+                    val fileName = getFileNameHelper(chapter.title, text)
+                    
+                    val speakText = text.replace(AppPattern.notReadAloudRegex, "")
+                    if (speakText.isEmpty()) {
+                        createSilentSound(fileName)
+                    } else if (!hasSpeakFile(fileName)) {
+                        runCatching {
+                            val inputStream = getSpeakStream(httpTts, speakText)
+                            if (inputStream != null) {
+                                createSpeakFile(fileName, inputStream)
+                            } else {
+                                createSilentSound(fileName)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            AppLog.put("听书预下载异常: ${e.localizedMessage}", e)
+        }
+    }
+
     private fun downloadAndPlayAudiosStream() {
         exoPlayer.clearMediaItems()
         downloadTask?.cancel()
@@ -219,8 +281,6 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         downloader.download(null)
                     }
                 }
-                val currentTitle = textChapter?.chapter?.title ?: ""
-
                 contentList.forEachIndexed { index, content ->
                     ensureActive()
                     if (index < nowSpeak) return@forEachIndexed
@@ -229,7 +289,10 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                         text = text.substring(paragraphStartPos)
                     }
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
+                    
+                    val currentTitle = textChapter?.chapter?.title ?: ""
                     val fileName = getFileNameHelper(currentTitle, text)
+                    
                     val dataSourceFactory = createDataSourceFactory(httpTts, speakText)
                     val downloader = createDownloader(dataSourceFactory, fileName)
                     downloaderChannel.send(downloader)
@@ -242,6 +305,49 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             }
         }.onError {
             AppLog.put("朗读下载出错\n${it.localizedMessage}", it, true)
+        }
+    }
+
+    /**
+     * 【核心优化】流式预下载后续章节音频：包含标题
+     */
+    private suspend fun preDownloadAudiosStream(
+        httpTts: HttpTTS,
+        downloaderChannel: Channel<Downloader>
+    ) {
+        val book = ReadBook.book ?: return
+        val currentIdx = ReadBook.durChapterIndex
+        val limit = AppConfig.audioPreDownloadNum
+        
+        try {
+            for (i in 1..limit) {
+                currentCoroutineContext().ensureActive()
+                val targetIndex = currentIdx + i
+                val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
+                
+                val contentString = getChapterContent(book, chapter)
+                val segments = mutableListOf<String>()
+
+                if (AppConfig.readAloudTitle) {
+                    segments.add(chapter.title)
+                }
+
+                if (!contentString.isNullOrEmpty()) {
+                    segments.addAll(contentString.split("\n").filter { it.isNotEmpty() })
+                }
+                
+                segments.forEach { text ->
+                    currentCoroutineContext().ensureActive()
+                    
+                    val fileName = getFileNameHelper(chapter.title, text)
+                    val speakText = text.replace(AppPattern.notReadAloudRegex, "")
+                    val dataSourceFactory = createDataSourceFactory(httpTts, speakText)
+                    val downloader = createDownloader(dataSourceFactory, fileName)
+                    downloaderChannel.send(downloader)
+                }
+            }
+        } catch (e: Exception) {
+            AppLog.put("听书流式预下载异常: ${e.localizedMessage}", e)
         }
     }
 
@@ -268,19 +374,18 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                 } ?: resources.openRawResource(R.raw.silent_sound)
             }
         }
-        return CacheDataSource.Factory()
+        val factory = CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(upstreamFactory)
             .setCacheWriteDataSinkFactory(cacheDataSinkFactory)
+        return factory
     }
 
     private fun createDownloader(factory: CacheDataSource.Factory, fileName: String): Downloader {
         val uri = fileName.toUri()
         val request = DownloadRequest.Builder(fileName, uri).build()
-        return DefaultDownloaderFactory(
-            factory,
-            okHttpClient.dispatcher.executorService
-        ).createDownloader(request)
+        return DefaultDownloaderFactory(factory, okHttpClient.dispatcher.executorService)
+            .createDownloader(request)
     }
 
     private fun createMediaSource(factory: DataSource.Factory, fileName: String): MediaSource {
@@ -290,7 +395,10 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             .createMediaSource(MediaItem.fromUri(fileName))
     }
 
-    private suspend fun getSpeakStream(httpTts: HttpTTS, speakText: String): InputStream? {
+    private suspend fun getSpeakStream(
+        httpTts: HttpTTS,
+        speakText: String
+    ): InputStream? {
         while (true) {
             try {
                 val analyzeUrl = AnalyzeUrl(
@@ -307,14 +415,16 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
                 if (checkJs?.isNotBlank() == true) {
                     response = analyzeUrl.evalJS(checkJs, response) as Response
                 }
-                response.headers["Content-Type"]?.let { contentTypeHeader ->
-                    val contentType = contentTypeHeader.substringBefore(";")
-                    val ct = httpTts.contentType
+                response.headers["Content-Type"]?.let { ct ->
+                    val contentType = ct.substringBefore(";")
+                    val httpTtsContentType = httpTts.contentType
                     if (contentType == "application/json" || contentType.startsWith("text/")) {
                         throw NoStackTraceException(response.body.string())
-                    } else if (ct?.isNotBlank() == true) {
-                        if (!contentType.matches(ct.toRegex())) {
-                            throw NoStackTraceException("TTS服务器返回错误：" + response.body.string())
+                    } else if (httpTtsContentType?.isNotBlank() == true) {
+                        if (!contentType.matches(httpTtsContentType.toRegex())) {
+                            throw NoStackTraceException(
+                                "TTS服务器返回错误：" + response.body.string()
+                            )
                         }
                     }
                 }
@@ -359,6 +469,16 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
         return null
     }
 
+    /**
+     * 【关键 Helper】文件名生成器：确保主循环和预下载算法 100% 对齐
+     */
+    private fun getFileNameHelper(title: String, content: String): String {
+        // 增加 .trim() 确保即使标题带了换行符或空格也能命中缓存
+        val t = title.trim()
+        return MD5Utils.md5Encode16(t) + "_" +
+                MD5Utils.md5Encode16("${ReadAloud.httpTTS?.url}-|-$speechRate-|-$content")
+    }
+
     private fun md5SpeakFileName(content: String, textChapter: TextChapter? = this.textChapter): String {
         return getFileNameHelper(textChapter?.chapter?.title ?: "", content)
     }
@@ -391,7 +511,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     private fun removeCacheFile() {
         val keepTime = AppConfig.audioCacheCleanTime
         val protectCurrentChapter = keepTime > 0
-        val titleMd5 = if (protectCurrentChapter) MD5Utils.md5Encode16(this.textChapter?.chapter?.title ?: "") else ""
+        val titleMd5 = if (protectCurrentChapter) MD5Utils.md5Encode16(this.textChapter?.chapter?.title?.trim() ?: "") else ""
+
         FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach {
             val isSilentSound = it.length() == 2160L
             val shouldDelete = if (keepTime == 0L) {
@@ -399,6 +520,7 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             } else {
                 !it.name.startsWith(titleMd5) && (System.currentTimeMillis() - it.lastModified() > keepTime)
             }
+
             if (shouldDelete || isSilentSound) {
                 FileUtils.delete(it.absolutePath)
             }
@@ -442,8 +564,8 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
             val sleep = exoPlayer.duration / speakTextLength
             val start = speakTextLength * exoPlayer.currentPosition / exoPlayer.duration
             for (i in start..contentList[nowSpeak].length) {
-                if (pageIndex + 1 < textChapter.pageSize &&
-                    readAloudNumber + i > textChapter.getReadLength(pageIndex + 1)
+                if (pageIndex + 1 < textChapter.pageSize
+                    && readAloudNumber + i > textChapter.getReadLength(pageIndex + 1)
                 ) {
                     pageIndex++
                     ReadBook.moveToNextPage()
@@ -528,66 +650,13 @@ class HttpReadAloudService : BaseReadAloudService(), Player.Listener {
     }
 
     override fun aloudServicePendingIntent(actionStr: String): PendingIntent? {
-        return servicePendingIntent(actionStr)
+        // 修正泛型明确化，防止构建时推断错误
+        return servicePendingIntent<HttpReadAloudService>(actionStr)
     }
 
     class CustomLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(0) {
         override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
             return C.TIME_UNSET
         }
-    }
-
-    /**
-     * 核心优化：预下载后续章节音频
-     */
-    private suspend fun preDownloadAudios(httpTts: HttpTTS) {
-        val book = ReadBook.book ?: return
-        val currentIdx = ReadBook.durChapterIndex
-        val limit = AppConfig.audioPreDownloadNum
-        try {
-            for (i in 1..limit) {
-                currentCoroutineContext().ensureActive()
-                val targetIndex = currentIdx + i
-                val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
-                val contentString = getChapterContent(book, chapter)
-                val segments = mutableListOf<String>()
-
-                // 1. 标题预下载（需与主逻辑保持一致）
-                if (AppConfig.readAloudTitle) {
-                    segments.add(chapter.title)
-                }
-
-                // 2. 正文分段
-                if (!contentString.isNullOrEmpty()) {
-                    segments.addAll(contentString.split("\n").filter { it.isNotEmpty() })
-                }
-
-                segments.forEach { text ->
-                    currentCoroutineContext().ensureActive()
-                    // 必须使用该章节自身的 title 进行计算，否则 MD5 会不匹配
-                    val fileName = getFileNameHelper(chapter.title, text)
-                    val speakText = text.replace(AppPattern.notReadAloudRegex, "")
-
-                    if (speakText.isEmpty()) {
-                        createSilentSound(fileName)
-                    } else if (!hasSpeakFile(fileName)) {
-                        runCatching {
-                            val inputStream = getSpeakStream(httpTts, speakText)
-                            if (inputStream != null) {
-                                createSpeakFile(fileName, inputStream)
-                            } else {
-                                createSilentSound(fileName)
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            AppLog.put("听书预下载异常: ${e.localizedMessage}", e)
-        }
-    }
-
-    private suspend fun preDownloadAudiosStream(httpTts: HttpTTS, channel: Channel<Downloader>) {
-        // 流模式预下载逻辑实现...
     }
 }
