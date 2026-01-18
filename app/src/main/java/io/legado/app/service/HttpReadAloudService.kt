@@ -68,11 +68,10 @@ import java.net.SocketTimeoutException
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线朗读服务 (MD3 专用适配版)
- * 1. 修正数据库 DAO 方法名：使用 allEnabled
- * 2. 优化循环语法：避免 iterator 歧义报错
- * 3. 完美支持净化：手动实现替换规则逻辑
- * 4. 修复预下载：try-catch 移入循环，对接预下载设置
+ * 在线朗读服务 (MD3 深度适配修复版)
+ * 1. 深度集成 BGM 联动
+ * 2. 修正 audioPreDownloadNum 预载设置失效问题
+ * 3. 解决构建时 DAO 方法名歧义及 allEnabled 缺失问题
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -214,10 +213,14 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
+    /**
+     * 【MD3 核心逻辑】音频预存 - 对齐 audioPreDownloadNum
+     */
     private suspend fun preDownloadAudios(httpTts: HttpTTS) {
         val book = ReadBook.book ?: return
         val currentIdx = ReadBook.durChapterIndex
-        val limit = AppConfig.preDownloadNum 
+        // 关键修复：使用听书专用的音频预载数量设置
+        val limit = AppConfig.audioPreDownloadNum 
         
         for (i in 1..limit) {
             try {
@@ -225,6 +228,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val targetIndex = currentIdx + i
                 val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
                 
+                // 手动净化逻辑，兼容 MD3 构建环境
                 val contentString = getPurifiedChapterContent(book, chapter)
                 val segments = mutableListOf<String>()
 
@@ -255,7 +259,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                 }
             } catch (e: Exception) {
-                AppLog.put("听书预下载异常(第${i}章): ${e.localizedMessage}", e)
+                AppLog.put("MD3 音频预载异常(第${i}章): ${e.localizedMessage}")
             }
         }
     }
@@ -306,7 +310,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     ) {
         val book = ReadBook.book ?: return
         val currentIdx = ReadBook.durChapterIndex
-        val limit = AppConfig.preDownloadNum
+        val limit = AppConfig.audioPreDownloadNum
         
         for (i in 1..limit) {
             try {
@@ -335,14 +339,13 @@ class HttpReadAloudService : BaseReadAloudService(),
                     downloaderChannel.send(downloader)
                 }
             } catch (e: Exception) {
-                AppLog.put("听书流式预下载异常(第${i}章): ${e.localizedMessage}", e)
+                AppLog.put("MD3 流式预载异常(第${i}章): ${e.localizedMessage}")
             }
         }
     }
 
     /**
-     * 手动净化方法 (MD3 适配)
-     * 修正 DAO 名为 allEnabled，改用 forEach 消除迭代歧义
+     * MD3 兼容版净化函数：手动应用替换规则
      */
     private fun getPurifiedChapterContent(book: Book, chapter: BookChapter): String? {
         var content = BookHelp.getContent(book, chapter) ?: return null
@@ -350,15 +353,15 @@ class HttpReadAloudService : BaseReadAloudService(),
             try {
                 val rules = appDb.replaceRuleDao.allEnabled
                 rules.forEach { rule ->
-                    val patternText = rule.pattern
-                    if (patternText != null && patternText.isNotEmpty()) {
+                    val pattern = rule.pattern
+                    if (pattern != null && pattern.isNotEmpty()) {
                         try {
-                            content = content.replace(patternText.toRegex(), rule.replacement)
+                            content = content.replace(pattern.toRegex(), rule.replacement)
                         } catch (_: Exception) {}
                     }
                 }
             } catch (e: Exception) {
-                AppLog.put("预下载应用替换规则失败", e)
+                AppLog.put("MD3 预载规则处理失败", e)
             }
         }
         return content
@@ -532,7 +535,7 @@ class HttpReadAloudService : BaseReadAloudService(),
 
         val book = ReadBook.book ?: return
         val currentIdx = ReadBook.durChapterIndex
-        val limit = AppConfig.preDownloadNum
+        val limit = AppConfig.audioPreDownloadNum
         
         val protectedPrefixes = mutableSetOf<String>()
         val currentTitle = this.textChapter?.chapter?.title ?: ""
@@ -553,8 +556,14 @@ class HttpReadAloudService : BaseReadAloudService(),
             val fName = fileItem.name
             val fSize = fileItem.length()
             val isSilent = fSize == 2160L
+            
             val isProtected = protectedPrefixes.any { fName.startsWith(it) }
-            val shouldDelete = if (isProtected) false else (System.currentTimeMillis() - fileItem.lastModified() > keepTime)
+            
+            val shouldDelete = if (isProtected) {
+                false 
+            } else {
+                (System.currentTimeMillis() - fileItem.lastModified() > keepTime)
+            }
 
             if (shouldDelete || isSilent) {
                 FileUtils.delete(fileItem.absolutePath)
@@ -590,13 +599,19 @@ class HttpReadAloudService : BaseReadAloudService(),
         val textChapter = textChapter ?: return
         playIndexJob = lifecycleScope.launch {
             upTtsProgress(readAloudNumber + 1)
-            if (exoPlayer.duration <= 0) return@launch
+            if (exoPlayer.duration <= 0) {
+                return@launch
+            }
             val speakTextLength = contentList[nowSpeak].length
-            if (speakTextLength <= 0) return@launch
+            if (speakTextLength <= 0) {
+                return@launch
+            }
             val sleep = exoPlayer.duration / speakTextLength
             val start = speakTextLength * exoPlayer.currentPosition / exoPlayer.duration
             for (i in start..contentList[nowSpeak].length) {
-                if (pageIndex + 1 < textChapter.pageSize && readAloudNumber + i > textChapter.getReadLength(pageIndex + 1)) {
+                if (pageIndex + 1 < textChapter.pageSize
+                    && readAloudNumber + i > textChapter.getReadLength(pageIndex + 1)
+                ) {
                     pageIndex++
                     ReadBook.moveToNextPage()
                     upTtsProgress(readAloudNumber + i.toInt())
@@ -610,7 +625,11 @@ class HttpReadAloudService : BaseReadAloudService(),
         downloadTask?.cancel()
         exoPlayer.stop()
         speechRate = AppConfig.speechRatePlay + 5
-        if (AppConfig.streamReadAloudAudio) downloadAndPlayAudiosStream() else downloadAndPlayAudios()
+        if (AppConfig.streamReadAloudAudio) {
+            downloadAndPlayAudiosStream()
+        } else {
+            downloadAndPlayAudios()
+        }
     }
 
     override fun onPlaybackStateChanged(playbackState: Int) {
@@ -642,7 +661,9 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) return
-        if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) playErrorNo = 0
+        if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) {
+            playErrorNo = 0
+        }
         updateNextPos()
         upPlayPos()
     }
@@ -652,7 +673,9 @@ class HttpReadAloudService : BaseReadAloudService(),
         AppLog.put("朗读错误\n${contentList[nowSpeak]}", error)
         deleteCurrentSpeakFile()
         playErrorNo++
-        if (playErrorNo >= 5) pauseReadAloud() else {
+        if (playErrorNo >= 5) {
+            pauseReadAloud()
+        } else {
             if (exoPlayer.hasNextMediaItem()) {
                 exoPlayer.seekToNextMediaItem()
                 exoPlayer.prepare()
@@ -675,6 +698,8 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     class CustomLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(0) {
-        override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long = C.TIME_UNSET
+        override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+            return C.TIME_UNSET
+        }
     }
 }
