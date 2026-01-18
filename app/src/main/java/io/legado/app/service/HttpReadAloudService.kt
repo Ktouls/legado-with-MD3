@@ -226,43 +226,45 @@ class HttpReadAloudService : BaseReadAloudService(),
         val currentIdx = ReadBook.durChapterIndex
         val limit = AppConfig.audioPreDownloadNum 
         
-        for (i in 1..limit) {
-            try {
-                currentCoroutineContext().ensureActive()
-                val targetIndex = currentIdx + i
-                val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
-                
-                val contentString = getPurifiedChapterContent(book, chapter)
-                val segments = mutableListOf<String>()
-
-                if (AppConfig.readAloudTitle) {
-                    segments.add(chapter.title)
-                }
-
-                if (!contentString.isNullOrEmpty()) {
-                    segments.addAll(contentString.split("\n").filter { it.isNotEmpty() })
-                }
-
-                segments.forEach { segmentText ->
+        try { // 修正：包裹整体逻辑，防止 catch 孤立
+            for (i in 1..limit) {
+                try {
                     currentCoroutineContext().ensureActive()
-                    val fileName = getFileNameHelper(chapter.title, segmentText)
+                    val targetIndex = currentIdx + i
+                    val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
                     
-                    val speakText = segmentText.replace(AppPattern.notReadAloudRegex, "")
-                    if (speakText.isEmpty()) {
-                        createSilentSound(fileName)
-                    } else if (!hasSpeakFile(fileName)) {
-                        runCatching {
-                            val inputStream = getSpeakStream(httpTts, speakText)
-                            if (inputStream != null) {
-                                createSpeakFile(fileName, inputStream)
-                            } else {
-                                createSilentSound(fileName)
+                    val contentString = getPurifiedChapterContent(book, chapter)
+                    val segments = mutableListOf<String>()
+
+                    if (AppConfig.readAloudTitle) {
+                        segments.add(chapter.title)
+                    }
+
+                    if (!contentString.isNullOrEmpty()) {
+                        segments.addAll(contentString.split("\n").filter { it.isNotEmpty() })
+                    }
+
+                    segments.forEach { segmentText ->
+                        currentCoroutineContext().ensureActive()
+                        val fileName = getFileNameHelper(chapter.title, segmentText)
+                        
+                        val speakText = segmentText.replace(AppPattern.notReadAloudRegex, "")
+                        if (speakText.isEmpty()) {
+                            createSilentSound(fileName)
+                        } else if (!hasSpeakFile(fileName)) {
+                            runCatching {
+                                val inputStream = getSpeakStream(httpTts, speakText)
+                                if (inputStream != null) {
+                                    createSpeakFile(fileName, inputStream)
+                                } else {
+                                    createSilentSound(fileName)
+                                }
                             }
                         }
                     }
+                } catch (e: Exception) {
+                    AppLog.put("音频预载异常(第${i}章): ${e.localizedMessage}")
                 }
-            } catch (e: Exception) {
-                AppLog.put("音频预载异常(第${i}章): ${e.localizedMessage}")
             }
         } catch (e: Exception) {
             AppLog.put("听书预下载异常: ${e.localizedMessage}", e)
