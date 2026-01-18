@@ -55,109 +55,67 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     var themeMode = appCtx.getPrefString(PreferKey.themeMode, "0")
     var AppTheme = appCtx.getPrefString(PreferKey.appTheme, "0")
-
-    var swipeAnimation = appCtx.getPrefBoolean(PreferKey.swipeAnimation, true)
-
     var useDefaultCover = appCtx.getPrefBoolean(PreferKey.useDefaultCover, false)
     var optimizeRender = CanvasRecorderFactory.isSupport
             && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
     var recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
-    var webServiceAutoStart = appCtx.getPrefBoolean(PreferKey.webServiceAutoStart, false)
-
-    // -- lyc 版本特性 --
-    var adaptSpecialStyle = appCtx.getPrefBoolean(PreferKey.adaptSpecialStyle, true)
-    var useUnderline = appCtx.getPrefBoolean(PreferKey.useUnderline, false)
-
-
+    var webServiceAutoStart = appCtx.getPrefBoolean(PreferKey.webServiceAutoStart)
+    
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
-
-            PreferKey.adaptSpecialStyle -> adaptSpecialStyle =
-                appCtx.getPrefBoolean(PreferKey.adaptSpecialStyle, true)
-
-            PreferKey.useUnderline -> useUnderline =
-                appCtx.getPrefBoolean(PreferKey.useUnderline, false)
-
             PreferKey.appTheme -> {
                 AppTheme = appCtx.getPrefString(PreferKey.appTheme, "0")
             }
-
             PreferKey.themeMode -> {
                 themeMode = appCtx.getPrefString(PreferKey.themeMode, "0")
             }
-
             PreferKey.clickActionTL -> clickActionTL =
                 appCtx.getPrefInt(PreferKey.clickActionTL, 2)
-
             PreferKey.clickActionTC -> clickActionTC =
                 appCtx.getPrefInt(PreferKey.clickActionTC, 2)
-
             PreferKey.clickActionTR -> clickActionTR =
                 appCtx.getPrefInt(PreferKey.clickActionTR, 1)
-
             PreferKey.clickActionML -> clickActionML =
                 appCtx.getPrefInt(PreferKey.clickActionML, 2)
-
             PreferKey.clickActionMC -> clickActionMC =
                 appCtx.getPrefInt(PreferKey.clickActionMC, 0)
-
             PreferKey.clickActionMR -> clickActionMR =
                 appCtx.getPrefInt(PreferKey.clickActionMR, 1)
-
             PreferKey.clickActionBL -> clickActionBL =
                 appCtx.getPrefInt(PreferKey.clickActionBL, 2)
-
             PreferKey.clickActionBC -> clickActionBC =
                 appCtx.getPrefInt(PreferKey.clickActionBC, 1)
-
             PreferKey.clickActionBR -> clickActionBR =
                 appCtx.getPrefInt(PreferKey.clickActionBR, 1)
-
             PreferKey.mangaClickActionTL -> mangaClickActionTL =
                 appCtx.getPrefInt(PreferKey.mangaClickActionTL, -1)
-
             PreferKey.mangaClickActionTC -> mangaClickActionTC =
                 appCtx.getPrefInt(PreferKey.mangaClickActionTC, -1)
-
             PreferKey.mangaClickActionTR -> mangaClickActionTR =
                 appCtx.getPrefInt(PreferKey.mangaClickActionTR, 1)
-
             PreferKey.mangaClickActionML -> mangaClickActionML =
                 appCtx.getPrefInt(PreferKey.mangaClickActionML, 2)
-
             PreferKey.mangaClickActionMC -> mangaClickActionMC =
                 appCtx.getPrefInt(PreferKey.mangaClickActionMC, 0)
-
             PreferKey.mangaClickActionMR -> mangaClickActionMR =
                 appCtx.getPrefInt(PreferKey.mangaClickActionMR, 1)
-
             PreferKey.mangaClickActionBL -> mangaClickActionBL =
                 appCtx.getPrefInt(PreferKey.mangaClickActionBL, 2)
-
             PreferKey.mangaClickActionBC -> mangaClickActionBC =
                 appCtx.getPrefInt(PreferKey.mangaClickActionBC, 1)
-
             PreferKey.mangaClickActionBR -> mangaClickActionBR =
                 appCtx.getPrefInt(PreferKey.mangaClickActionBR, 1)
-
             PreferKey.readBodyToLh -> ReadBookConfig.readBodyToLh =
                 appCtx.getPrefBoolean(PreferKey.readBodyToLh, true)
-
             PreferKey.useZhLayout -> ReadBookConfig.useZhLayout =
                 appCtx.getPrefBoolean(PreferKey.useZhLayout)
-
             PreferKey.userAgent -> userAgent = getPrefUserAgent()
-
             PreferKey.antiAlias -> useAntiAlias = appCtx.getPrefBoolean(PreferKey.antiAlias)
-
             PreferKey.useDefaultCover -> useDefaultCover =
                 appCtx.getPrefBoolean(PreferKey.useDefaultCover, false)
-
             PreferKey.optimizeRender -> optimizeRender = CanvasRecorderFactory.isSupport
                     && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
-
             PreferKey.recordLog -> recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
-
         }
     }
 
@@ -654,14 +612,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             ?: bookshelfSort
     }
 
-    private fun getPrefUserAgent(): String {
-        val ua = appCtx.getPrefString(PreferKey.userAgent)
-        if (ua.isNullOrBlank()) {
-            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + BuildConfig.Cronet_Main_Version + " Safari/537.36"
-        }
-        return ua
-    }
-
     var bitmapCacheSize: Int
         get() = appCtx.getPrefInt(PreferKey.bitmapCacheSize, 50)
         set(value) {
@@ -715,26 +665,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         set(value) {
             appCtx.putPrefBoolean(PreferKey.brightnessVwPos, value)
         }
-
-    fun detectClickArea() {
-        if (clickActionTL * clickActionTC * clickActionTR
-            * clickActionML * clickActionMC * clickActionMR
-            * clickActionBL * clickActionBC * clickActionBR != 0
-        ) {
-            appCtx.putPrefInt(PreferKey.clickActionMC, 0)
-            appCtx.toastOnUi("当前没有配置菜单区域,自动恢复中间区域为菜单.")
-        }
-    }
-
-    fun detectMangaClickArea() {
-        if (mangaClickActionTL * mangaClickActionTC * mangaClickActionTR
-            * mangaClickActionML * mangaClickActionMC * mangaClickActionMR
-            * mangaClickActionBL * mangaClickActionBC * mangaClickActionBR != 0
-        ) {
-            appCtx.putPrefInt(PreferKey.mangaClickActionMC, 0)
-            appCtx.toastOnUi("当前没有配置菜单区域,自动恢复中间区域为菜单.")
-        }
-    }
 
     var firebaseEnable: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.firebaseEnable, false)
@@ -957,7 +887,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.sliderVibrator, value)
         }
 
-    // ================= 自定义功能区域 Start =================
+    var containerOpacity: Int
+        get() = appCtx.getPrefInt(PreferKey.containerOpacity, 100)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.containerOpacity, value)
+        }
+
+    // ================= 自定义功能与修复区域 Start =================
 
     // 1. 听书预加载数量
     val audioPreDownloadNum: Int
@@ -969,16 +905,19 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     // 2. 音频缓存保留时间 (返回毫秒)
     val audioCacheCleanTime: Long
         get() {
-            // 修正冲突点：统一使用 PreferKey 逻辑并将其转为 Long
-            val str = appCtx.getPrefInt(PreferKey.audioCacheCleanTime, 10)
-            return str.toLong() * 60 * 1000L
+            val str = appCtx.getPrefString("audioCacheCleanTime")
+            val minutes = str?.toLongOrNull() ?: 10L
+            return minutes * 60 * 1000L
         }
 
-    // 3. 辅助获取原始分钟数，用于设置界面显示
+    // 3. 辅助获取原始分钟数
     val audioCacheCleanTimeOrgin: Int
-        get() = appCtx.getPrefInt(PreferKey.audioCacheCleanTime, 10)
+        get() {
+            val str = appCtx.getPrefString("audioCacheCleanTime")
+            return str?.toIntOrNull() ?: 10
+        }
 
-    // 4. 朗读标题开关，修复 HttpReadAloudService 报错
+    // 4. 朗读标题开关
     var readAloudTitle: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.readAloudTitle, true)
         set(value) = appCtx.putPrefBoolean(PreferKey.readAloudTitle, value)
@@ -989,8 +928,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         FileUtils.delete(baseDir.absolutePath + File.separator + "httpTTS_cache")
     }
 
-    // ================= BGM 背景音乐配置 =================
-
+    // 5. BGM 配置
     var isBgmEnabled: Boolean
         get() = appCtx.getPrefBoolean("is_bgm_enabled", false)
         set(value) = appCtx.putPrefBoolean("is_bgm_enabled", value)
@@ -1003,13 +941,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefInt("bgm_volume", 30)
         set(value) = appCtx.putPrefInt("bgm_volume", value)
 
-    // ================= 样式相关 =================
-
-    var containerOpacity: Int
-        get() = appCtx.getPrefInt(PreferKey.containerOpacity, 100)
-        set(value) {
-            appCtx.putPrefInt(PreferKey.containerOpacity, value)
-        }
+    // ================= 自定义功能与修复区域 End =================
 
     private fun getPrefUserAgent(): String {
         val ua = appCtx.getPrefString(PreferKey.userAgent)
@@ -1017,5 +949,15 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + BuildConfig.Cronet_Main_Version + " Safari/537.36"
         }
         return ua
+    }
+
+    fun detectMangaClickArea() {
+        if (mangaClickActionTL * mangaClickActionTC * mangaClickActionTR
+            * mangaClickActionML * mangaClickActionMC * mangaClickActionMR
+            * mangaClickActionBL * mangaClickActionBC * mangaClickActionBR != 0
+        ) {
+            appCtx.putPrefInt(PreferKey.mangaClickActionMC, 0)
+            appCtx.toastOnUi("当前没有配置菜单区域,自动恢复中间区域为菜单.")
+        }
     }
 }
