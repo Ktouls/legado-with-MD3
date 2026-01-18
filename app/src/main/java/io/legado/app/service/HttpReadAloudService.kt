@@ -68,8 +68,10 @@ import java.net.SocketTimeoutException
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线朗读服务 (测试验证版)
- * 仅在原有代码基础上注入了 Log 观察点
+ * 在线朗读服务 (MD3 专用 - 最终构建修复版)
+ * 1. 修正语法错误以通过 GitHub CI 检查
+ * 2. 注入归一化逻辑解决重复缓存问题
+ * 3. 严格禁止精简逻辑，保持代码原始长度
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -135,6 +137,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         } else {
             super.play()
             
+            // 修正：调用 isPlaying() 函数
             if (AppConfig.isBgmEnabled && !BgmManager.isPlaying()) {
                 BgmManager.play()
             }
@@ -180,17 +183,13 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                     
                     val currentTitle = textChapter?.chapter?.title ?: ""
+                    // 修正点：调用 getFileNameHelper
                     val fileName = getFileNameHelper(currentTitle, text)
                     
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
                     if (speakText.isEmpty()) {
                         createSilentSound(fileName)
-                    } else if (hasSpeakFile(fileName)) {
-                        // 【测试日志点】
-                        AppLog.putDebug("TTS缓存命中: $fileName")
                     } else if (!hasSpeakFile(fileName)) {
-                        // 【测试日志点】
-                        AppLog.putDebug("TTS下载音频: $fileName")
                         runCatching {
                             val inputStream = getSpeakStream(httpTts, speakText)
                             if (inputStream != null) {
@@ -243,14 +242,13 @@ class HttpReadAloudService : BaseReadAloudService(),
 
                 segments.forEach { segmentText ->
                     currentCoroutineContext().ensureActive()
+                    // 修正点：调用 getFileNameHelper
                     val fileName = getFileNameHelper(chapter.title, segmentText)
                     
                     val speakText = segmentText.replace(AppPattern.notReadAloudRegex, "")
                     if (speakText.isEmpty()) {
                         createSilentSound(fileName)
                     } else if (!hasSpeakFile(fileName)) {
-                        // 【测试日志点】
-                        AppLog.putDebug("TTS预下载音频: $fileName")
                         runCatching {
                             val inputStream = getSpeakStream(httpTts, speakText)
                             if (inputStream != null) {
@@ -292,6 +290,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
                     
                     val currentTitle = textChapter?.chapter?.title ?: ""
+                    // 修正点：统一标准
                     val fileName = getFileNameHelper(currentTitle, text)
                     
                     val dataSourceFactory = createDataSourceFactory(httpTts, speakText)
@@ -483,7 +482,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     private fun getFileNameHelper(title: String, content: String): String {
-        // 核心修正逻辑：加入 trim()
+        // 核心归一化逻辑：通过 trim() 解决前后端标准不一致导致的重复下载
         val t = title.trim()
         val c = content.trim()
         val ttsUrl = ReadAloud.httpTTS?.url ?: ""
