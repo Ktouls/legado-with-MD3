@@ -3,7 +3,8 @@ on:
   workflow_dispatch: # 手动触发按钮
 
 permissions:
-  contents: write # 必须赋予写入权限，否则 push 会失败
+  contents: write   # 允许修改代码内容 [cite: 2026-01-17]
+  actions: write    # 修正：赋予权限以允许同步上游对工作流脚本的修改
 
 jobs:
   sync:
@@ -12,7 +13,7 @@ jobs:
       - name: 检出 tset 分支代码
         uses: actions/checkout@v4
         with:
-          ref: tset # 对应您的分支名 tset
+          ref: tset # 对应您的本地分支名 tset
           fetch-depth: 0
 
       - name: 配置 Git 环境
@@ -22,12 +23,12 @@ jobs:
 
       - name: 执行合并（优先保留我的代码）
         run: |
-          # 添加上游仓库地址
+          # 添加 MD3 版的上游仓库地址
           git remote add upstream https://github.com/HapeLee/legado-with-MD3.git
           git fetch upstream
-          # 强制使用 -X ours 策略，确保不删除或精简原有逻辑
+          # 使用 -X ours 策略，确保不随意精简或删除您的原有逻辑 [cite: 2026-01-17]
           git merge upstream/main -X ours --allow-unrelated-histories
 
       - name: 推送更新回 tset 分支
         run: |
-          git push origin tset
+          git push origin tset # 推送到您的 tset 分支
