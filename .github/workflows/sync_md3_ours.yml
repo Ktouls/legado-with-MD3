@@ -20,19 +20,20 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: 执行合并
+      - name: 执行代码合并与脚本保护
         run: |
           git remote add upstream https://github.com/HapeLee/legado-with-MD3.git
           git fetch upstream
-          # 1. 正常执行合并 [cite: 2026-01-17]
-          git merge upstream/main -X ours --allow-unrelated-histories || true
           
-          # 2. 关键修复：强制将工作流文件夹恢复为您原来的版本
-          # 这能绕过 GitHub 的权限拦截，确保 push 成功
+          # 1. 执行合并，但强制不自动提交 (--no-commit) [cite: 2026-01-17]
+          git merge upstream/main -X ours --allow-unrelated-histories --no-commit || true
+          
+          # 2. 核心修复：从当前的 HEAD（即合并前的状态）还原工作流文件夹
+          # 这一步会撤销上游对 test.yml 的所有改动，确保文件夹与您仓库原本的一致
           git checkout HEAD -- .github/workflows
           
-          # 3. 提交这个恢复操作
-          git commit -m "Keep original workflows to bypass permission restrictions" || echo "No changes to commit"
+          # 3. 手动完成提交
+          git commit -m "Merge upstream/main and protect local workflows" || echo "No changes to commit"
 
       - name: 推送更新回 tset 分支
         run: |
