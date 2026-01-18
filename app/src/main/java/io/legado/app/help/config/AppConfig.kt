@@ -55,13 +55,29 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     var themeMode = appCtx.getPrefString(PreferKey.themeMode, "0")
     var AppTheme = appCtx.getPrefString(PreferKey.appTheme, "0")
+
+    // 上游新增：滑动动画
+    var swipeAnimation = appCtx.getPrefBoolean(PreferKey.swipeAnimation, true)
+
     var useDefaultCover = appCtx.getPrefBoolean(PreferKey.useDefaultCover, false)
     var optimizeRender = CanvasRecorderFactory.isSupport
             && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
     var recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
+    
+    // 上游新增：Web服务自动启动
+    var webServiceAutoStart = appCtx.getPrefBoolean(PreferKey.webServiceAutoStart, false)
+
+    // 上游新增：lyc 版本特性
+    var adaptSpecialStyle = appCtx.getPrefBoolean(PreferKey.adaptSpecialStyle, true)
+    var useUnderline = appCtx.getPrefBoolean(PreferKey.useUnderline, false)
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
+            PreferKey.adaptSpecialStyle -> adaptSpecialStyle =
+                appCtx.getPrefBoolean(PreferKey.adaptSpecialStyle, true)
+
+            PreferKey.useUnderline -> useUnderline =
+                appCtx.getPrefBoolean(PreferKey.useUnderline, false)
 
             PreferKey.appTheme -> {
                 AppTheme = appCtx.getPrefString(PreferKey.appTheme, "0")
@@ -142,6 +158,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
                     && appCtx.getPrefBoolean(PreferKey.optimizeRender, false)
 
             PreferKey.recordLog -> recordLog = appCtx.getPrefBoolean(PreferKey.recordLog)
+
+            PreferKey.containerOpacity -> containerOpacity = 
+                appCtx.getPrefInt(PreferKey.containerOpacity, 100)
 
         }
     }
@@ -915,7 +934,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var shouldShowExpandButton: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.shouldShowExpandButton, false)
         set(value) {
-            appCtx.putPrefBoolean(PreferKey.shouldShowExpandButton, value)
+            appCtx.putPrefBoolean(PreferKey.shouldShowExpandButton, false)
         }
 
     var exploreFilterState: Int
@@ -942,24 +961,30 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.sliderVibrator, value)
         }
 
-    // ================= 自定义功能区域 Start =================
+    // --- 以下为深度合并的自定义逻辑与修复点 ---
 
-    // 1. 听书预加载数量
-    val audioPreDownloadNum: Int
-        get() {
-            val str = appCtx.getPrefString("audioPreDownloadNum")
-            return str?.toIntOrNull() ?: 10
+    // 上游新增：容器透明度
+    var containerOpacity: Int
+        get() = appCtx.getPrefInt(PreferKey.containerOpacity, 100)
+        set(value) {
+            appCtx.putPrefInt(PreferKey.containerOpacity, value)
         }
 
-    // 2. 音频缓存保留时间 (返回毫秒)
+    // 听书预加载数量 (兼容 PreferKey)
+    val audioPreDownloadNum: Int
+        get() = appCtx.getPrefInt(PreferKey.audioPreDownloadNum, 10)
+
+    // 音频缓存保留时间 (兼容 PreferKey，支持 Dialog 逻辑)
+    val audioCacheCleanTimeOrgin: Int
+        get() = appCtx.getPrefInt(PreferKey.audioCacheCleanTime, 10)
+
     val audioCacheCleanTime: Long
         get() {
-            val str = appCtx.getPrefString("audioCacheCleanTime")
-            val minutes = str?.toLongOrNull() ?: 10L
+            val minutes = appCtx.getPrefInt(PreferKey.audioCacheCleanTime, 10)
             return minutes * 60 * 1000L
         }
 
-    // 3. 【补全修复点】朗读标题开关，修复 HttpReadAloudService 报错
+    // 自定义：朗读标题开关
     var readAloudTitle: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.readAloudTitle, true)
         set(value) = appCtx.putPrefBoolean(PreferKey.readAloudTitle, value)
@@ -970,8 +995,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         FileUtils.delete(baseDir.absolutePath + File.separator + "httpTTS_cache")
     }
 
-    // ================= BGM 背景音乐配置 Start =================
-
+    // 自定义：BGM 背景音乐配置
     var isBgmEnabled: Boolean
         get() = appCtx.getPrefBoolean("is_bgm_enabled", false)
         set(value) = appCtx.putPrefBoolean("is_bgm_enabled", value)
@@ -983,9 +1007,4 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var bgmVolume: Int
         get() = appCtx.getPrefInt("bgm_volume", 30)
         set(value) = appCtx.putPrefInt("bgm_volume", value)
-
-    // ================= BGM 背景音乐配置 End =================
-
-    // ================= 自定义功能区域 End =================
-
 }
