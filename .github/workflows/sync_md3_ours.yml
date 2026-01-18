@@ -9,7 +9,7 @@ jobs:
       - name: 检出 tset 分支代码
         uses: actions/checkout@v4
         with:
-          ref: tset # 对应你的分支名 tset
+          ref: tset # 对应您的本地分支名 tset
           fetch-depth: 0
 
       - name: 配置 Git 环境
@@ -22,9 +22,9 @@ jobs:
           # 添加 MD3 版的上游仓库地址
           git remote add upstream https://github.com/HapeLee/legado-with-MD3.git
           git fetch upstream
-          # 假设上游主分支为 master，执行以我为主的合并
-          git merge upstream/master -X ours --allow-unrelated-histories
+          # 执行合并：将上游的 main 分支合并到您的 tset 分支，冲突时以您为准
+          git merge upstream/main -X ours --allow-unrelated-histories
 
       - name: 推送更新回 tset 分支
         run: |
-          git push origin tset # 推送到你的 tset 分支
+          git push origin tset # 推送到您的 tset 分支
