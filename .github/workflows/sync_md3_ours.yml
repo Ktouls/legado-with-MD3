@@ -1,0 +1,30 @@
+name: MD3 自动同步上游并保留修改
+on:
+  workflow_dispatch: # 手动触发按钮
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出 tset 分支代码
+        uses: actions/checkout@v4
+        with:
+          ref: tset # 对应你的分支名 tset
+          fetch-depth: 0
+
+      - name: 配置 Git 环境
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: 执行合并（优先保留我的代码）
+        run: |
+          # 添加 MD3 版的上游仓库地址
+          git remote add upstream https://github.com/HapeLee/legado-with-MD3.git
+          git fetch upstream
+          # 假设上游主分支为 master，执行以我为主的合并
+          git merge upstream/master -X ours --allow-unrelated-histories
+
+      - name: 推送更新回 tset 分支
+        run: |
+          git push origin tset # 推送到你的 tset 分支
