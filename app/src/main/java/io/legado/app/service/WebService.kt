@@ -21,6 +21,7 @@ import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.printOnDebug
+import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.startForegroundServiceCompat
@@ -33,20 +34,38 @@ import splitties.init.appCtx
 import splitties.systemservices.powerManager
 import splitties.systemservices.wifiManager
 import java.io.IOException
-// ——————【新增引用】——————
-import io.legado.app.utils.putPrefBoolean
 
 class WebService : BaseService() {
 
     companion object {
+        const val PREF_AUTO_START = "web_service_auto" // 统一定义Key
         var isRun = false
         var hostAddress = ""
 
+        /**
+         * 用户主动开启服务
+         * 记录意图为：需要自启 (true)
+         */
         fun start(context: Context) {
-            // ——————【修改开始】记录开启状态——————
-            appCtx.putPrefBoolean("web_service_auto", true)
-            // ——————【修改结束】——————
+            appCtx.putPrefBoolean(PREF_AUTO_START, true)
             context.startService<WebService>()
+        }
+
+        /**
+         * 仅启动服务，不改变自启配置
+         * 用于 App 启动时的自动恢复
+         */
+        fun startSilent(context: Context) {
+            context.startService<WebService>()
+        }
+
+        /**
+         * 用户主动停止服务
+         * 记录意图为：不再自启 (false)
+         */
+        fun stop(context: Context) {
+            appCtx.putPrefBoolean(PREF_AUTO_START, false)
+            context.stopService<WebService>()
         }
 
         fun startForeground(context: Context) {
@@ -54,14 +73,9 @@ class WebService : BaseService() {
             context.startForegroundServiceCompat(intent)
         }
 
-        fun stop(context: Context) {
-            // ——————【修改开始】记录关闭状态——————
-            appCtx.putPrefBoolean("web_service_auto", false)
-            // ——————【修改结束】——————
-            context.stopService<WebService>()
-        }
-
         fun serve() {
+            // 通过 Tile 或其他快捷方式启动，视为用户意图，应当记录开启状态
+            appCtx.putPrefBoolean(PREF_AUTO_START, true)
             appCtx.startService<WebService> {
                 action = "serve"
             }
@@ -125,17 +139,22 @@ class WebService : BaseService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             IntentAction.stop -> {
-                // ——————【修改开始】通知栏点击停止时，也记录关闭状态——————
-                appCtx.putPrefBoolean("web_service_auto", false)
+                // 用户点击通知栏的停止按钮，视为主动关闭，记录状态为 false
+                appCtx.putPrefBoolean(PREF_AUTO_START, false)
                 stopSelf()
-                // ——————【修改结束】——————
             }
             "copyHostAddress" -> sendToClip(hostAddress)
-            "serve" -> if (useWakeLock) {
-                wakeLock.acquire()
-                wifiLock?.acquire()
+            "serve", IntentAction.start -> {
+                // 如果是通过 intent action 显式启动（如 Tile），确保记录开启状态
+                if (intent?.action == "serve") {
+                     appCtx.putPrefBoolean(PREF_AUTO_START, true)
+                }
+                if (useWakeLock) {
+                    wakeLock.acquire()
+                    wifiLock?.acquire()
+                }
+                upWebServer()
             }
-
             else -> upWebServer()
         }
         return super.onStartCommand(intent, flags, startId)
@@ -158,6 +177,8 @@ class WebService : BaseService() {
         postEvent(EventBus.WEB_SERVICE, "")
         FlowEventBus.post(EventBus.WEB_SERVICE, "")
         upTile(false)
+        // 注意：onDestroy 中绝对不要修改 web_service_auto 配置，
+        // 否则 App 被系统杀后台时会误将自启设置为 false。
     }
 
     private fun upWebServer() {
