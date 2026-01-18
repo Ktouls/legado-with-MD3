@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!--App-->
     <string name="app_name">Legado</string>
     <string name="app_name_a">Legado·A</string>
     <string name="receiving_shared_label">Legado·search</string>
     <string name="tip_perm_request_storage">Legado needs storage access to find and read books. please go "App Settings" to allow "Storage permission".</string>
 
-    <!--Other-->
     <string name="menu_backup">Home</string>
     <string name="menu_restore">Restore</string>
     <string name="menu_import_old">Import Legado data</string>
@@ -396,7 +394,6 @@
     <string name="no_prev_page">No prior page</string>
     <string name="no_next_page">No next page</string>
 
-    <!-- source start-->
     <string name="source_name">Source Name(sourceName)</string>
     <string name="source_url">Source url(sourceUrl)</string>
     <string name="source_group">Source group(sourceGroup)</string>
@@ -455,9 +452,6 @@
     <string name="check_key_word">Check key word(checkKeyWord)</string>
     <string name="rule_actions">Actions(actions)</string>
     <string name="rule_is_pay">Is pay(isPay)</string>
-    <!-- source end-->
-
-    <!--error string start-->
     <string name="error_no_source">No source</string>
     <string name="error_get_book_info">Failed to obtain book information</string>
     <string name="error_get_content">Failed to obtain content</string>
@@ -470,8 +464,6 @@
     <string name="net_error_10001">No network</string>
     <string name="net_error_10002">Network connection timeout</string>
     <string name="net_error_10003">Data parsing failed</string>
-    <!--error string end-->
-
     <string name="source_http_header">HTTP Header</string>
     <string name="debug_source">Debug source</string>
     <string name="import_by_qr_code">Import from QR code</string>
@@ -506,6 +498,7 @@
     <string name="sure_del_any">Are you sure to delete %s?</string>
     <string name="sure_del_all_book">Are you sure to delete all books？</string>
     <string name="sure_del_download_book">Do you want to delete the downloaded book chapters at the same time?</string>
+    <string name="parental_control">Parental control</string>
     <string name="qr_per">Scan QR code requires Camera permissions</string>
     <string name="aloud_can_not_auto_page">Speech is running, cannot turn pages automatically</string>
     <string name="input_charset">Input encoding</string>
@@ -716,7 +709,6 @@
     <string name="full_screen_gestures_support">Full screen gestures support</string>
     <string name="disable_return_key">Disable return key</string>
 
-    <!--color-->
     <string name="primary">Primary</string>
     <string name="accent">Accent</string>
     <string name="background_color">Background color</string>
@@ -947,7 +939,6 @@
     <string name="user_agent">User agent</string>
     <string name="bg_alpha">Background alpha</string>
 
-    <!-- check source config string -->
     <string name="check_source_config">Check setting</string>
     <string name="check_source_item">Check item</string>
     <string name="check_source_timeout">Single book source check timeout (seconds)</string>
@@ -1018,7 +1009,6 @@
     <string name="image_retain_number_summary">Keep the number of chapters read %s</string>
     <string name="image_retain_number">Number of manga reservations</string>
     <string name="export_pics_file">Export Picture Files</string>
-    <!-- string end -->
     <string name="error_decode_bitmap">Fail to decode bitmap</string>
     <string name="error_image_url_empty">Image url is empty, check replacement rules</string>
     <string name="variable_comment">变量说明(variableComment)</string>
@@ -1286,7 +1276,7 @@
     <string name="reduce_stutter">Reduces stutter when entering the reading interface, but increases book loading time.</string>
     <string name="delay_book_load">Delay Book Loading</string>
     <string name="compact_list">Compact List</string>
-    <string name="author_read">%s • %dNot read</string>
+    <string name="author_read">%1$s • %2$d Not read</string>
     <string name="menu_alpha_sum">Current %d%%</string>
     <string name="menu_alpha">Menu transparency</string>
     <string name="change_source_option_title">请选择操作</string>
