@@ -68,10 +68,8 @@ import java.net.SocketTimeoutException
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线朗读服务 (MD3 深度适配修复版)
- * 1. 深度集成 BGM 联动
- * 2. 修正 audioPreDownloadNum 预载设置失效问题
- * 3. 解决构建时 DAO 方法名歧义及 allEnabled 缺失问题
+ * 在线朗读服务 (MD3 专用适配版)
+ * 已适配：BGM 仅随听书主按键联动（不随句子切换切歌）、audioPreDownloadNum 设置对齐
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -136,7 +134,11 @@ class HttpReadAloudService : BaseReadAloudService(),
             ReadBook.readAloud()
         } else {
             super.play()
-            BgmManager.play()
+            
+            // 修正：主播放逻辑中启动 BGM，加入状态判断防止切歌
+            if (AppConfig.isBgmEnabled && !BgmManager.isPlaying) {
+                BgmManager.play()
+            }
 
             if (AppConfig.streamReadAloudAudio) {
                 downloadAndPlayAudiosStream()
@@ -149,7 +151,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun playStop() {
         exoPlayer.stop()
         playIndexJob?.cancel()
-        BgmManager.pause()
+        BgmManager.pause() // 停止时同步暂停 BGM
     }
 
     private fun updateNextPos() {
@@ -213,13 +215,9 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
-    /**
-     * 【MD3 核心逻辑】音频预存 - 对齐 audioPreDownloadNum
-     */
     private suspend fun preDownloadAudios(httpTts: HttpTTS) {
         val book = ReadBook.book ?: return
         val currentIdx = ReadBook.durChapterIndex
-        // 关键修复：使用听书专用的音频预载数量设置
         val limit = AppConfig.audioPreDownloadNum 
         
         for (i in 1..limit) {
@@ -228,7 +226,6 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val targetIndex = currentIdx + i
                 val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
                 
-                // 手动净化逻辑，兼容 MD3 构建环境
                 val contentString = getPurifiedChapterContent(book, chapter)
                 val segments = mutableListOf<String>()
 
@@ -259,7 +256,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                 }
             } catch (e: Exception) {
-                AppLog.put("MD3 音频预载异常(第${i}章): ${e.localizedMessage}")
+                AppLog.put("预载异常(第${i}章): ${e.localizedMessage}")
             }
         }
     }
@@ -339,14 +336,11 @@ class HttpReadAloudService : BaseReadAloudService(),
                     downloaderChannel.send(downloader)
                 }
             } catch (e: Exception) {
-                AppLog.put("MD3 流式预载异常(第${i}章): ${e.localizedMessage}")
+                AppLog.put("流式预载异常(第${i}章): ${e.localizedMessage}")
             }
         }
     }
 
-    /**
-     * MD3 兼容版净化函数：手动应用替换规则
-     */
     private fun getPurifiedChapterContent(book: Book, chapter: BookChapter): String? {
         var content = BookHelp.getContent(book, chapter) ?: return null
         if (AppConfig.replaceEnableDefault) {
@@ -361,7 +355,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                 }
             } catch (e: Exception) {
-                AppLog.put("MD3 预载规则处理失败", e)
+                AppLog.put("预载净化失败", e)
             }
         }
         return content
@@ -577,7 +571,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         kotlin.runCatching {
             playIndexJob?.cancel()
             exoPlayer.pause()
-            BgmManager.pause()
+            BgmManager.pause() // 同步暂停 BGM
         }
     }
 
@@ -588,7 +582,10 @@ class HttpReadAloudService : BaseReadAloudService(),
                 play()
             } else {
                 exoPlayer.play()
-                BgmManager.play()
+                // 修正：恢复朗读时同步恢复 BGM，带状态检查
+                if (AppConfig.isBgmEnabled && !BgmManager.isPlaying) {
+                    BgmManager.play()
+                }
                 upPlayPos()
             }
         }
@@ -638,7 +635,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             Player.STATE_READY -> {
                 if (pause) return
                 exoPlayer.play()
-                BgmManager.play()
+                // 修正：彻底移除此处的 BgmManager.play()
                 upPlayPos()
             }
             Player.STATE_ENDED -> {
