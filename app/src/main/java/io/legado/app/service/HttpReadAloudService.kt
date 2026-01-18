@@ -68,11 +68,8 @@ import java.net.SocketTimeoutException
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线朗读服务 (MD3 专用 - 逻辑结构完整保留版)
- * 修正内容：
- * 1. 语法：BgmManager.isPlaying()
- * 2. 缓存：文件名生成加入 trim() 确保前后端标准一致
- * 3. 逻辑：严禁精简，完整保留原有所有函数和流程
+ * 在线朗读服务 (测试验证版)
+ * 仅在原有代码基础上注入了 Log 观察点
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -188,7 +185,12 @@ class HttpReadAloudService : BaseReadAloudService(),
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
                     if (speakText.isEmpty()) {
                         createSilentSound(fileName)
+                    } else if (hasSpeakFile(fileName)) {
+                        // 【测试日志点】
+                        AppLog.putDebug("TTS缓存命中: $fileName")
                     } else if (!hasSpeakFile(fileName)) {
+                        // 【测试日志点】
+                        AppLog.putDebug("TTS下载音频: $fileName")
                         runCatching {
                             val inputStream = getSpeakStream(httpTts, speakText)
                             if (inputStream != null) {
@@ -247,6 +249,8 @@ class HttpReadAloudService : BaseReadAloudService(),
                     if (speakText.isEmpty()) {
                         createSilentSound(fileName)
                     } else if (!hasSpeakFile(fileName)) {
+                        // 【测试日志点】
+                        AppLog.putDebug("TTS预下载音频: $fileName")
                         runCatching {
                             val inputStream = getSpeakStream(httpTts, speakText)
                             if (inputStream != null) {
@@ -479,7 +483,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     private fun getFileNameHelper(title: String, content: String): String {
-        // 核心修正点：对标题和正文进行 trim()，解决前后端执行标准不统一导致的重复缓存问题
+        // 核心修正逻辑：加入 trim()
         val t = title.trim()
         val c = content.trim()
         val ttsUrl = ReadAloud.httpTTS?.url ?: ""
