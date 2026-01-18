@@ -54,6 +54,9 @@ import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.rhino.NativeBaseSource
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.storage.Backup
+// ——————【新增引用】——————
+import io.legado.app.service.WebService
+// ——————【修改结束】——————
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.BookCover
 import io.legado.app.utils.ChineseUtils
@@ -171,6 +174,13 @@ class App : Application() {
             if (AppConfig.syncBookProgress) {
                 AppWebDav.downloadAllBookProgress()
             }
+
+            // ——————【修改开始】Web服务智能自启检查——————
+            // 只有当配置确实为 true 时才启动，且使用 startSilent 不修改配置状态
+            if (getPrefBoolean(WebService.PREF_AUTO_START, false)) {
+                WebService.startSilent(this@App)
+            }
+            // ——————【修改结束】——————
         }
     }
 
