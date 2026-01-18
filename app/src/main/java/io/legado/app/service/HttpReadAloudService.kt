@@ -65,7 +65,6 @@ import java.io.File
 import java.io.InputStream
 import java.net.ConnectException
 import java.net.SocketTimeoutException
-import kotlin.coroutines.coroutineContext
 
 /**
  * 在线朗读服务 (MD3 专用 - 最终构建修复版)
@@ -217,6 +216,11 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
+    // 辅助方法：确保能读到文件
+    private fun getChapterContent(book: Book, chapter: BookChapter): String? {
+        return BookHelp.getContent(book, chapter)
+    }
+
     private suspend fun preDownloadAudios(httpTts: HttpTTS) {
         val book = ReadBook.book ?: return
         val currentIdx = ReadBook.durChapterIndex
@@ -260,6 +264,8 @@ class HttpReadAloudService : BaseReadAloudService(),
             } catch (e: Exception) {
                 AppLog.put("音频预载异常(第${i}章): ${e.localizedMessage}")
             }
+        } catch (e: Exception) {
+            AppLog.put("听书预下载异常: ${e.localizedMessage}", e)
         }
     }
 

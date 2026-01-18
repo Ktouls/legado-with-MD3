@@ -87,6 +87,7 @@ class ThemeConfigFragment : PreferenceFragmentCompat(),
         addPreferencesFromResource(R.xml.pref_config_theme)
 
         upPreferenceSummary(PreferKey.fontScale)
+        upPreferenceSummary(PreferKey.containerOpacity)
 
         findPreference<ColorPreference>(PreferKey.cBackground)?.let {
             it.onSaveColor = { color ->
@@ -180,7 +181,7 @@ class ThemeConfigFragment : PreferenceFragmentCompat(),
             }
 
 
-            PreferKey.paletteStyle, PreferKey.pureBlack, PreferKey.enableBlur -> {
+            PreferKey.paletteStyle, PreferKey.pureBlack, PreferKey.enableBlur, PreferKey.swipeAnimation -> {
                 ThemeSyncer.syncAll()
                 Handler(Looper.getMainLooper()).postDelayed({
                     recreateActivities()
@@ -247,11 +248,35 @@ class ThemeConfigFragment : PreferenceFragmentCompat(),
                 .setValue(10)
                 .setCustomButton((R.string.btn_default_s)) {
                     putPrefInt(PreferKey.fontScale, 0)
-                    recreateActivities()
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        recreateActivities()
+                    }, 100)
                 }
                 .show {
                     putPrefInt(PreferKey.fontScale, it)
-                    recreateActivities()
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        recreateActivities()
+                    }, 100)
+                }
+
+            PreferKey.containerOpacity -> NumberPickerDialog(requireContext())
+                .setTitle(getString(R.string.container_opacity))
+                .setMaxValue(100)
+                .setMinValue(0)
+                .setValue(AppConfig.containerOpacity)
+                .setCustomButton((R.string.btn_default_s)) {
+                    AppConfig.containerOpacity = 100
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        ThemeSyncer.syncContainerOpacity()
+                        upPreferenceSummary(PreferKey.containerOpacity)
+                    }, 100)
+                }
+                .show {
+                    AppConfig.containerOpacity = it
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        ThemeSyncer.syncContainerOpacity()
+                        upPreferenceSummary(PreferKey.containerOpacity)
+                    }, 100)
                 }
 
             PreferKey.bgImage -> selectBgAction(false)
@@ -402,6 +427,10 @@ class ThemeConfigFragment : PreferenceFragmentCompat(),
         when (preferenceKey) {
             //PreferKey.barElevation -> preference.summary =
             //    getString(R.string.bar_elevation_s, value)
+            PreferKey.containerOpacity -> {
+                preference.summary =
+                    getString(R.string.container_opacity_summary, AppConfig.containerOpacity)
+            }
 
             PreferKey.fontScale -> {
                 val fontScale = AppContextWrapper.getFontScale(requireContext())

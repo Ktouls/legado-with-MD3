@@ -1,5 +1,6 @@
 package io.legado.app.service
 
+// ——————【新增引用】——————
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -21,6 +22,7 @@ import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.printOnDebug
+import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.startForegroundServiceCompat
