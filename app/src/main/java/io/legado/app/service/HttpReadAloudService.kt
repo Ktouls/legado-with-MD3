@@ -68,11 +68,11 @@ import java.net.SocketTimeoutException
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线朗读服务 (MD3 终极修复版)
- * 1. 修复构建失败：手动实现净化逻辑
- * 2. 完美支持净化：MD5 文件名与阅读界面完全匹配
- * 3. 修复预下载：try-catch 内部循环，对接 preDownloadNum 设置
- * 4. 缓存保护：支持 0 值即时清理
+ * 在线朗读服务 (MD3 专用适配版)
+ * 1. 修正数据库 DAO 方法名：使用 allEnabled
+ * 2. 优化循环语法：避免 iterator 歧义报错
+ * 3. 完美支持净化：手动实现替换规则逻辑
+ * 4. 修复预下载：try-catch 移入循环，对接预下载设置
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -225,7 +225,6 @@ class HttpReadAloudService : BaseReadAloudService(),
                 val targetIndex = currentIdx + i
                 val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, targetIndex) ?: break
                 
-                // 手动执行净化逻辑，确保编译通过
                 val contentString = getPurifiedChapterContent(book, chapter)
                 val segments = mutableListOf<String>()
 
@@ -342,17 +341,19 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     /**
-     * 手动净化方法：确保 MD5 计算与实际阅读完全一致
+     * 手动净化方法 (MD3 适配)
+     * 修正 DAO 名为 allEnabled，改用 forEach 消除迭代歧义
      */
     private fun getPurifiedChapterContent(book: Book, chapter: BookChapter): String? {
         var content = BookHelp.getContent(book, chapter) ?: return null
         if (AppConfig.replaceEnableDefault) {
             try {
-                val rules = appDb.replaceRuleDao.getEnabled()
-                for (rule in rules) {
-                    if (!rule.pattern.isNullOrEmpty()) {
+                val rules = appDb.replaceRuleDao.allEnabled
+                rules.forEach { rule ->
+                    val patternText = rule.pattern
+                    if (patternText != null && patternText.isNotEmpty()) {
                         try {
-                            content = content.replace(rule.pattern.toRegex(), rule.replacement)
+                            content = content.replace(patternText.toRegex(), rule.replacement)
                         } catch (_: Exception) {}
                     }
                 }
@@ -521,8 +522,11 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     private fun removeCacheFile() {
         val keepTime = AppConfig.audioCacheCleanTime
+
         if (keepTime == 0L) {
-            FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach { FileUtils.delete(it.absolutePath) }
+            FileUtils.listDirsAndFiles(ttsFolderPath)?.forEach { fileItem ->
+                FileUtils.delete(fileItem.absolutePath)
+            }
             return
         }
 
@@ -552,7 +556,9 @@ class HttpReadAloudService : BaseReadAloudService(),
             val isProtected = protectedPrefixes.any { fName.startsWith(it) }
             val shouldDelete = if (isProtected) false else (System.currentTimeMillis() - fileItem.lastModified() > keepTime)
 
-            if (shouldDelete || isSilent) FileUtils.delete(fileItem.absolutePath)
+            if (shouldDelete || isSilent) {
+                FileUtils.delete(fileItem.absolutePath)
+            }
         }
     }
 
@@ -628,7 +634,9 @@ class HttpReadAloudService : BaseReadAloudService(),
 
     override fun onTimelineChanged(timeline: Timeline, reason: Int) {
         if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED) {
-            if (!timeline.isEmpty && exoPlayer.playbackState == Player.STATE_IDLE) exoPlayer.prepare()
+            if (!timeline.isEmpty && exoPlayer.playbackState == Player.STATE_IDLE) {
+                exoPlayer.prepare()
+            }
         }
     }
 
