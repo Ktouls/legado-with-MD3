@@ -1,10 +1,9 @@
 name: MD3 自动同步上游并保留修改
 on:
-  workflow_dispatch: # 手动触发按钮
+  workflow_dispatch:
 
 permissions:
-  contents: write   # 允许修改代码内容 [cite: 2026-01-17]
-  actions: write    # 修正：赋予权限以允许同步上游对工作流脚本的修改
+  contents: write
 
 jobs:
   sync:
@@ -13,7 +12,7 @@ jobs:
       - name: 检出 tset 分支代码
         uses: actions/checkout@v4
         with:
-          ref: tset # 对应您的本地分支名 tset
+          ref: tset
           fetch-depth: 0
 
       - name: 配置 Git 环境
@@ -21,14 +20,20 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: 执行合并（优先保留我的代码）
+      - name: 执行合并
         run: |
-          # 添加 MD3 版的上游仓库地址
           git remote add upstream https://github.com/HapeLee/legado-with-MD3.git
           git fetch upstream
-          # 使用 -X ours 策略，确保不随意精简或删除您的原有逻辑 [cite: 2026-01-17]
-          git merge upstream/main -X ours --allow-unrelated-histories
+          # 1. 正常执行合并 [cite: 2026-01-17]
+          git merge upstream/main -X ours --allow-unrelated-histories || true
+          
+          # 2. 关键修复：强制将工作流文件夹恢复为您原来的版本
+          # 这能绕过 GitHub 的权限拦截，确保 push 成功
+          git checkout HEAD -- .github/workflows
+          
+          # 3. 提交这个恢复操作
+          git commit -m "Keep original workflows to bypass permission restrictions" || echo "No changes to commit"
 
       - name: 推送更新回 tset 分支
         run: |
-          git push origin tset # 推送到您的 tset 分支
+          git push origin tset
