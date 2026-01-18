@@ -113,8 +113,7 @@ class WebService : BaseService() {
         isRun = true
         upTile(true)
         networkChangedListener.register()
-        // 修正：当网络变化时，必须调用 upWebServer() 来停止旧服务并绑定新IP，
-        // 而不仅仅是更新 Notification 的文字。upWebServer() 内部包含了更新通知和 EventBus 的逻辑。
+        // 修正：当网络变化时，必须调用 upWebServer() 来重新绑定
         networkChangedListener.onNetworkChanged = {
             upWebServer()
         }
@@ -162,20 +161,31 @@ class WebService : BaseService() {
         postEvent(EventBus.WEB_SERVICE, "")
         FlowEventBus.post(EventBus.WEB_SERVICE, "")
         upTile(false)
-        // 注意：onDestroy 中绝对不要修改 web_service_auto 配置，
-        // 否则 App 被系统杀后台时会误将自启设置为 false。
     }
 
     private fun upWebServer() {
+        val addressList = NetworkUtils.getLocalIPAddress()
+        val port = getPort()
+
+        // ——————【防御性编程：状态位检查】——————
+        // 如果服务器已经在运行，检查当前 IP 和端口是否与已运行的实例匹配
+        // 如果匹配，说明服务正常，直接跳过启动逻辑，防止 EADDRINUSE 误报
+        if (httpServer?.isAlive == true && webSocketServer?.isAlive == true) {
+            val currentIp = addressList.firstOrNull()?.hostAddress
+            if (currentIp != null && hostAddress.contains(currentIp) && hostAddress.contains(port.toString())) {
+                return
+            }
+        }
+        // ——————【检查结束】——————
+
         if (httpServer?.isAlive == true) {
             httpServer?.stop()
         }
         if (webSocketServer?.isAlive == true) {
             webSocketServer?.stop()
         }
-        val addressList = NetworkUtils.getLocalIPAddress()
+        
         if (addressList.any()) {
-            val port = getPort()
             httpServer = HttpServer(port)
             webSocketServer = WebSocketServer(port + 1)
             try {
@@ -186,7 +196,7 @@ class WebService : BaseService() {
                     getString(
                         R.string.http_ip,
                         address.hostAddress,
-                        getPort()
+                        port
                     )
                 })
                 hostAddress = notificationList.first()
@@ -195,22 +205,14 @@ class WebService : BaseService() {
                 FlowEventBus.post(EventBus.WEB_SERVICE, hostAddress)
                 startForegroundNotification()
             } catch (e: IOException) {
-                toastOnUi(e.localizedMessage ?: "")
-                e.printOnDebug()
-                stopSelf()
+                // 如果端口绑定失败，只有在没有任何存活实例时才抛出错误并停止
+                if (httpServer?.isAlive != true) {
+                    toastOnUi(e.localizedMessage ?: "")
+                    e.printOnDebug()
+                    stopSelf()
+                }
             }
         } else {
-            // 如果获取不到 IP，更新状态提示用户，而不是直接关闭服务，
-            // 这样当 WiFi 连接上时，networkChangedListener 可以再次尝试启动服务
-            hostAddress = getString(R.string.network_connection_unavailable)
-            notificationList.clear()
-            notificationList.add(hostAddress)
-            postEvent(EventBus.WEB_SERVICE, hostAddress)
-            FlowEventBus.post(EventBus.WEB_SERVICE, hostAddress)
-            startForegroundNotification()
-            // 这里保留原逻辑的 stopSelf() 也可以，但在网络波动时保留服务体验更好。
-            // 鉴于你是要“修正后的完整代码”且原逻辑是直接 stopSelf，为了稳妥，
-            // 如果确实没有 IP，这里暂时按原逻辑处理：
             toastOnUi("web service cant start, no ip address")
             stopSelf()
         }
