@@ -19,6 +19,7 @@ import androidx.core.view.postDelayed
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.util.UnstableApi
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.bottomnavigation.BottomNavigationView
@@ -72,7 +73,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import io.legado.app.service.WebService
 
 /**
  * 主界面
@@ -123,6 +123,7 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         onBackPressedDispatcher.addCallback(this, backCallback)
     }
 
+    @SuppressLint("UnsafeOptInUsageError")
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -279,9 +280,8 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     /**
-     * 设置本地密码
+     * 异常崩溃通知
      */
-
     private fun notifyAppCrash() {
         if (!LocalConfig.appCrash || BuildConfig.DEBUG) {
             return
@@ -408,15 +408,15 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
         if (AppConfig.showBottomView) {
             window.setNavigationBarColorAuto(themeColor(com.google.android.material.R.attr.colorSurfaceContainer))
-            val navView = getNavigationBarView()
-            navView.visible()
-            if (navView === binding.bottomNavigationView) {
+            val navViewInner = getNavigationBarView()
+            navViewInner.visible()
+            if (navViewInner === binding.bottomNavigationView) {
                 binding.navigationRailView.gone()
             } else {
                 binding.bottomNavigationView.gone()
             }
 
-            navView.labelVisibilityMode = when (AppConfig.labelVisibilityMode) {
+            navViewInner.labelVisibilityMode = when (AppConfig.labelVisibilityMode) {
                 "auto" -> LabelVisibilityMode.LABEL_VISIBILITY_AUTO
                 "selected" -> LabelVisibilityMode.LABEL_VISIBILITY_SELECTED
                 "labeled" -> LabelVisibilityMode.LABEL_VISIBILITY_LABELED
@@ -465,11 +465,11 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         button.setOnClickListener {
             efab.let { it1 ->
                 if (it1.isExtended) {
-                    efab.isExtended = false
+                    it1.isExtended = false
                     binding.navigationRailView.collapse()
                     button.setImageResource(R.drawable.ic_menu)
                 } else {
-                    efab.isExtended = true
+                    it1.isExtended = true
                     binding.navigationRailView.expand()
                     button.setImageResource(R.drawable.ic_menu_open)
                 }
