@@ -68,8 +68,10 @@ import java.net.SocketTimeoutException
 import kotlin.coroutines.coroutineContext
 
 /**
- * 在线朗读服务 (MD3 专用适配版)
- * 已适配：BGM 仅随听书主按键联动（不随句子切换切歌）、audioPreDownloadNum 设置对齐
+ * 在线朗读服务 (MD3 专用 - 最终构建修复版)
+ * 1. 修正 BgmManager.isPlaying() 函数调用
+ * 2. 修正 audioPreDownloadNum 设置对齐
+ * 3. 优化 BGM 联动逻辑：播放/暂停同步，句子切换不切歌
  */
 @SuppressLint("UnsafeOptInUsageError")
 class HttpReadAloudService : BaseReadAloudService(),
@@ -135,8 +137,8 @@ class HttpReadAloudService : BaseReadAloudService(),
         } else {
             super.play()
             
-            // 修正：主播放逻辑中启动 BGM，加入状态判断防止切歌
-            if (AppConfig.isBgmEnabled && !BgmManager.isPlaying) {
+            // 修正点：使用 isPlaying() 且仅在未播放时启动，防止切歌
+            if (AppConfig.isBgmEnabled && !BgmManager.isPlaying()) {
                 BgmManager.play()
             }
 
@@ -151,7 +153,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     override fun playStop() {
         exoPlayer.stop()
         playIndexJob?.cancel()
-        BgmManager.pause() // 停止时同步暂停 BGM
+        BgmManager.pause()
     }
 
     private fun updateNextPos() {
@@ -256,7 +258,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                     }
                 }
             } catch (e: Exception) {
-                AppLog.put("预载异常(第${i}章): ${e.localizedMessage}")
+                AppLog.put("音频预载异常(第${i}章): ${e.localizedMessage}")
             }
         }
     }
@@ -571,7 +573,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         kotlin.runCatching {
             playIndexJob?.cancel()
             exoPlayer.pause()
-            BgmManager.pause() // 同步暂停 BGM
+            BgmManager.pause() // 确保暂停联动
         }
     }
 
@@ -582,8 +584,9 @@ class HttpReadAloudService : BaseReadAloudService(),
                 play()
             } else {
                 exoPlayer.play()
-                // 修正：恢复朗读时同步恢复 BGM，带状态检查
-                if (AppConfig.isBgmEnabled && !BgmManager.isPlaying) {
+                
+                // 修正点：将 isPlaying 改为 isPlaying()
+                if (AppConfig.isBgmEnabled && !BgmManager.isPlaying()) {
                     BgmManager.play()
                 }
                 upPlayPos()
@@ -635,7 +638,7 @@ class HttpReadAloudService : BaseReadAloudService(),
             Player.STATE_READY -> {
                 if (pause) return
                 exoPlayer.play()
-                // 修正：彻底移除此处的 BgmManager.play()
+                // 修正：彻底移除此处的 BgmManager.play() 防止句子切换切歌
                 upPlayPos()
             }
             Player.STATE_ENDED -> {
