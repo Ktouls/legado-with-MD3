@@ -969,12 +969,16 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     // 2. 音频缓存保留时间 (返回毫秒)
     val audioCacheCleanTime: Long
         get() {
-            val str = appCtx.getPrefString("audioCacheCleanTime")
-            val minutes = str?.toLongOrNull() ?: 10L
-            return minutes * 60 * 1000L
+            // 修正冲突点：统一使用 PreferKey 逻辑并将其转为 Long
+            val str = appCtx.getPrefInt(PreferKey.audioCacheCleanTime, 10)
+            return str.toLong() * 60 * 1000L
         }
 
-    // 3. 【补全修复点】朗读标题开关，修复 HttpReadAloudService 报错
+    // 3. 辅助获取原始分钟数，用于设置界面显示
+    val audioCacheCleanTimeOrgin: Int
+        get() = appCtx.getPrefInt(PreferKey.audioCacheCleanTime, 10)
+
+    // 4. 朗读标题开关，修复 HttpReadAloudService 报错
     var readAloudTitle: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.readAloudTitle, true)
         set(value) = appCtx.putPrefBoolean(PreferKey.readAloudTitle, value)
@@ -985,7 +989,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         FileUtils.delete(baseDir.absolutePath + File.separator + "httpTTS_cache")
     }
 
-    // ================= BGM 背景音乐配置 Start =================
+    // ================= BGM 背景音乐配置 =================
 
     var isBgmEnabled: Boolean
         get() = appCtx.getPrefBoolean("is_bgm_enabled", false)
@@ -999,22 +1003,19 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefInt("bgm_volume", 30)
         set(value) = appCtx.putPrefInt("bgm_volume", value)
 
-    // ================= BGM 背景音乐配置 End =================
-
-    // ================= 自定义功能区域 End =================
-
-    val audioCacheCleanTimeOrgin: Int
-        get() = appCtx.getPrefInt(PreferKey.audioCacheCleanTime, 10)
-
-    val audioCacheCleanTime: Long
-        get() {
-            val str = appCtx.getPrefInt(PreferKey.audioCacheCleanTime, 10)
-            return str * 60 * 1000L
-        }
+    // ================= 样式相关 =================
 
     var containerOpacity: Int
         get() = appCtx.getPrefInt(PreferKey.containerOpacity, 100)
         set(value) {
             appCtx.putPrefInt(PreferKey.containerOpacity, value)
         }
+
+    private fun getPrefUserAgent(): String {
+        val ua = appCtx.getPrefString(PreferKey.userAgent)
+        if (ua.isNullOrBlank()) {
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + BuildConfig.Cronet_Main_Version + " Safari/537.36"
+        }
+        return ua
+    }
 }
