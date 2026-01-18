@@ -176,7 +176,7 @@ class App : Application() {
             }
 
             // ——————【修改开始】Web服务智能自启检查——————
-            // 只有当配置确实为 true 时才启动，且使用 startSilent 不修改配置状态
+            // 严谨模式：仅当配置明确为 true 时执行静默启动，且 startSilent 不会修改配置
             if (getPrefBoolean(WebService.PREF_AUTO_START, false)) {
                 WebService.startSilent(this@App)
             }
