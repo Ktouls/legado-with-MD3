@@ -42,6 +42,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.update.AppUpdateGitHub
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.service.WebService
 import io.legado.app.ui.about.CrashLogsDialog
 import io.legado.app.ui.about.UpdateDialog
 import io.legado.app.ui.book.read.ReadBookActivity
@@ -71,11 +72,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import io.legado.app.service.WebService
 
-/**
- * 主界面
- */
 open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     BottomNavigationView.OnNavigationItemSelectedListener,
     BottomNavigationView.OnNavigationItemReselectedListener {
@@ -133,15 +130,14 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.S)
             binding.viewPagerMain.fitsSystemWindows = true
-        // 其他初始化逻辑
+        
         setupBackCallback()
         
-        // ——————【修改开始】——————
-        // 智能自启：如果上次是手动开启状态（web_service_auto 为 true），则自启
-        if (getPrefBoolean("web_service_auto", false)) {
-            WebService.startForeground(this)
+        // ——————【防御性编程：单点智能恢复】——————
+        // 只有在服务未运行且记忆状态为开启时，才执行静默启动，防止重复发送 Intent 引起端口冲突
+        if (!WebService.isRun && getPrefBoolean(WebService.PREF_AUTO_START, false)) {
+            WebService.startSilent(this)
         }
-        // ——————【修改结束】——————
         
         upBottomMenu()
         initView()
@@ -156,13 +152,9 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     override fun onPostCreate(savedInstanceState: Bundle?) {
         super.onPostCreate(savedInstanceState)
         lifecycleScope.launch {
-            //版本更新
             upVersion()
-            //设置本地密码
             notifyAppCrash()
-            //备份同步
             backupSync()
-            //自动更新书籍
             val isAutoRefreshedBook = savedInstanceState?.getBoolean("isAutoRefreshedBook") ?: false
             if (AppConfig.autoRefreshBook && !isAutoRefreshedBook) {
                 binding.viewPagerMain.postDelayed(1000) {
@@ -179,7 +171,7 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         val index = when (item.itemId) {
             R.id.menu_bookshelf -> 0
             R.id.menu_discovery -> realPositions.indexOf(idExplore)
-            R.id.menu_rss -> realPositions.indexOf(idRss)
+            R.id.menu_rss -> R.id.menu_rss // 保持逻辑一致性
             R.id.menu_my_config -> realPositions.indexOf(idMy)
             else -> 0
         }
@@ -233,9 +225,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         viewPagerMain.registerOnPageChangeCallback(PageChangeCallback())
     }
 
-    /**
-     * 版本更新日志
-     */
     private suspend fun upVersion() = suspendCoroutine<Unit?> { block ->
         if (LocalConfig.versionCode == appInfo.versionCode) {
             block.resume(null)
@@ -276,10 +265,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    /**
-     * 设置本地密码
-     */
-
     private fun notifyAppCrash() {
         if (!LocalConfig.appCrash || BuildConfig.DEBUG) {
             return
@@ -293,9 +278,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    /**
-     * 备份同步
-     */
     private fun backupSync() {
         if (!AppConfig.autoCheckNewBackup) {
             return
@@ -333,9 +315,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         }
     }
 
-    /**
-     * 如果重启太快fragment不会重建,这里更新一下书架的排序
-     */
     override fun recreate() {
         (fragmentMap[getFragmentId(0)] as? BaseBookshelfFragment)?.run {
             upSort()
