@@ -69,6 +69,9 @@ class WebService : BaseService() {
          * 以兼容方式启动前台服务
          */
         fun startForeground(context: Context) {
+            // ——————【补全记忆逻辑】——————
+            // 确保通过快捷磁贴启动时，状态也能被持久化记录
+            appCtx.putPrefBoolean(PREF_AUTO_START, true)
             val intent = Intent(context, WebService::class.java)
             context.startForegroundServiceCompat(intent)
         }
@@ -173,8 +176,7 @@ class WebService : BaseService() {
             return
         }
 
-        // ——————【逻辑完整性：幂等性检查】——————
-        // 核心：若服务已运行且关键参数（IP、端口）未变，则直接忽略，防止重复启动导致的冲突
+        // 幂等性检查：若环境未变且服务存活，不重复重启
         if (httpServer?.isAlive == true && webSocketServer?.isAlive == true) {
             val currentFirstIp = addressList.firstOrNull()?.hostAddress
             if (currentFirstIp != null && hostAddress.contains(currentFirstIp) && hostAddress.contains(port.toString())) {
@@ -182,7 +184,6 @@ class WebService : BaseService() {
             }
         }
 
-        // 参数发生变化，先停止旧服务
         stopServers()
 
         httpServer = HttpServer(port)
@@ -203,7 +204,6 @@ class WebService : BaseService() {
             FlowEventBus.post(EventBus.WEB_SERVICE, hostAddress)
             startForegroundNotification()
         } catch (e: IOException) {
-            // 端口绑定失败或资源冲突
             toastOnUi("Start Web Service failed: ${e.localizedMessage}")
             e.printOnDebug()
             stopSelf()
