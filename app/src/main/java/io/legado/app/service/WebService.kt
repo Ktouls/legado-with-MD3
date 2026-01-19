@@ -3,8 +3,6 @@ package io.legado.app.service
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.net.wifi.WifiManager
-import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import io.legado.app.R
@@ -30,6 +28,10 @@ import io.legado.app.utils.stopService
 import io.legado.app.utils.toastOnUi
 import io.legado.app.web.HttpServer
 import io.legado.app.web.WebSocketServer
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import splitties.init.appCtx
 import splitties.systemservices.powerManager
 import splitties.systemservices.wifiManager
@@ -41,7 +43,7 @@ class WebService : BaseService() {
         const val PREF_KEY = PreferKey.webService
         var isRun = false
         var hostAddress = ""
-        var port = 1122 // 记录当前实际运行的端口
+        var port = 1122
 
         fun start(context: Context) {
             appCtx.putPrefBoolean(PREF_KEY, true)
@@ -78,14 +80,17 @@ class WebService : BaseService() {
     }
     private val wifiLock by lazy {
         @Suppress("DEPRECATION")
-        wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "legado:WebService")
+        wifiManager?.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "legado:WebService")
             ?.apply { setReferenceCounted(false) }
     }
 
     private var httpServer: HttpServer? = null
     private var webSocketServer: WebSocketServer? = null
     private var notificationList = mutableListOf<String>()
-    private val serverLock = Any()
+    
+    // 使用协程作用域来处理耗时启动操作
+    private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
+    private var startJob: Job? = null
 
     private val networkChangedListener by lazy {
         NetworkChangedListener(this)
@@ -110,6 +115,7 @@ class WebService : BaseService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             IntentAction.stop -> {
+                // 用户主动停止，明确写入 false
                 appCtx.putPrefBoolean(PREF_KEY, false)
                 stopSelf()
             }
@@ -126,7 +132,8 @@ class WebService : BaseService() {
                 }
             }
         }
-        return START_STICKY
+        // 关键修改：使用 NOT_STICKY，防止因异常杀死后系统自动重启导致死循环
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() {
@@ -137,6 +144,8 @@ class WebService : BaseService() {
         }
         networkChangedListener.unRegister()
         isRun = false
+        // 停止所有正在进行的启动任务
+        startJob?.cancel()
         stopServers()
         postEvent(EventBus.WEB_SERVICE, "")
         FlowEventBus.post(EventBus.WEB_SERVICE, "")
@@ -144,67 +153,63 @@ class WebService : BaseService() {
     }
 
     private fun stopServers() {
-        synchronized(serverLock) {
-            try {
-                if (httpServer?.isAlive == true) httpServer?.stop()
-                httpServer = null
-                if (webSocketServer?.isAlive == true) webSocketServer?.stop()
-                webSocketServer = null
-            } catch (e: Exception) {
-                e.printOnDebug()
-            }
+        try {
+            if (httpServer?.isAlive == true) httpServer?.stop()
+            httpServer = null
+            if (webSocketServer?.isAlive == true) webSocketServer?.stop()
+            webSocketServer = null
+        } catch (e: Exception) {
+            e.printOnDebug()
         }
     }
 
     private fun upWebServer() {
-        synchronized(serverLock) {
+        // 取消上一次正在进行的启动任务，防止多次点击导致的多线程冲突
+        startJob?.cancel()
+        
+        startJob = serviceScope.launch {
             val addressList = NetworkUtils.getLocalIPAddress()
-            
-            // 获取用户设置的起始端口
             var currentPort = getPrefInt(PreferKey.webPort, 1122)
-            if (currentPort > 65530 || currentPort < 1024) {
-                currentPort = 1122
-            }
+            if (currentPort > 65530 || currentPort < 1024) currentPort = 1122
 
             if (addressList.isEmpty()) {
-                // 网络未就绪，暂不停止服务，等待下次回调，防止UI闪烁
-                return
+                // 网络未就绪时不停止服务，避免UI闪烁，仅记录日志
+                return@launch
             }
 
-            // ——————【状态检查】——————
-            // 如果服务活着，且IP没变，且端口也没变，直接跳过
+            // 状态检查：如果环境未变，直接跳过
             if (httpServer?.isAlive == true && webSocketServer?.isAlive == true) {
                 val currentFirstIp = addressList.firstOrNull()?.hostAddress
-                if (currentFirstIp != null && 
-                    hostAddress.contains(currentFirstIp) && 
-                    port == currentPort) { // 检查端口是否一致
-                    return
+                if (currentFirstIp != null && hostAddress.contains(currentFirstIp) && port == currentPort) {
+                    return@launch
                 }
             }
 
             stopServers()
 
-            // ——————【端口自动重试机制】——————
-            // 尝试绑定端口，如果占用则+1，最多尝试10次
             var isSuccess = false
             for (i in 0 until 10) {
                 val tryPort = currentPort + i
                 try {
-                    httpServer = HttpServer(tryPort)
-                    httpServer?.start()
+                    val tempHttp = HttpServer(tryPort)
+                    tempHttp.start()
                     
-                    // HTTP启动成功后，尝试启动WebSocket
-                    webSocketServer = WebSocketServer(tryPort + 1)
-                    webSocketServer?.start(30000)
+                    val tempWs = WebSocketServer(tryPort + 1)
+                    tempWs.start(30000)
                     
-                    // 全部成功，更新当前实际端口
+                    httpServer = tempHttp
+                    webSocketServer = tempWs
                     port = tryPort
                     isSuccess = true
-                    break 
+                    break
                 } catch (e: IOException) {
-                    // 绑定失败，清理并尝试下一个端口
-                    stopServers()
-                    e.printOnDebug()
+                    // 端口占用，清理临时对象并重试
+                    try {
+                        httpServer?.stop()
+                        webSocketServer?.stop()
+                    } catch (ignored: Exception) {}
+                    httpServer = null
+                    webSocketServer = null
                 }
             }
 
@@ -219,9 +224,9 @@ class WebService : BaseService() {
                 FlowEventBus.post(EventBus.WEB_SERVICE, hostAddress)
                 startForegroundNotification()
             } else {
-                // 重试10次都失败，才彻底放弃
+                // 启动失败，发送通知但不强制修改用户意图配置
                 isRun = false
-                toastOnUi("Web Service Start Failed: Ports $currentPort-${currentPort+10} are busy.")
+                toastOnUi("Web Service Start Failed: Ports busy.")
                 stopSelf()
             }
         }
@@ -241,7 +246,6 @@ class WebService : BaseService() {
                 getString(R.string.cancel),
                 servicePendingIntent<WebService>(IntentAction.stop)
             )
-        
         startForeground(NotificationId.WebService, builder.build())
     }
 
