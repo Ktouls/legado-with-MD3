@@ -42,6 +42,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.update.AppUpdateGitHub
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.service.WebService
 import io.legado.app.ui.about.CrashLogsDialog
 import io.legado.app.ui.about.UpdateDialog
 import io.legado.app.ui.book.read.ReadBookActivity
@@ -71,7 +72,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
-import io.legado.app.service.WebService
 
 /**
  * 主界面
@@ -135,14 +135,21 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             binding.viewPagerMain.fitsSystemWindows = true
         // 其他初始化逻辑
         setupBackCallback()
-        
-        // ——————【修改开始】——————
-        // 智能自启：如果上次是手动开启状态（web_service_auto 为 true），则自启
-        if (getPrefBoolean("web_service_auto", false)) {
-            WebService.startForeground(this)
+
+        // ——————【修改重点】——————
+        // 逻辑修正：
+        // 1. 读取配置 web_service_auto，确认用户是否开启了自动开关
+        // 2. 增加 && !WebService.isRun 判断：只有当服务【当前未运行】时才执行启动
+        // 3. 避免了服务已运行时重复调用导致的停止或跳变问题
+        if (getPrefBoolean("web_service_auto", false) && !WebService.isRun) {
+            kotlin.runCatching {
+                WebService.startForeground(this)
+            }.onFailure {
+                it.printStackTrace()
+            }
         }
         // ——————【修改结束】——————
-        
+
         upBottomMenu()
         initView()
         upHomePage()
