@@ -38,47 +38,31 @@ import java.io.IOException
 class WebService : BaseService() {
 
     companion object {
-        const val PREF_AUTO_START = "web_service_auto" // 统一定义记忆 Key
+        const val PREF_AUTO_START = "web_service_auto" 
         var isRun = false
         var hostAddress = ""
 
-        /**
-         * 用户主动开启服务：记录状态并启动
-         */
         fun start(context: Context) {
             appCtx.putPrefBoolean(PREF_AUTO_START, true)
             context.startService<WebService>()
         }
 
-        /**
-         * 静默/自动启动：不修改配置，仅尝试拉起服务
-         */
         fun startSilent(context: Context) {
             context.startService<WebService>()
         }
 
-        /**
-         * 用户主动停止服务：记录状态并停止
-         */
         fun stop(context: Context) {
             appCtx.putPrefBoolean(PREF_AUTO_START, false)
             context.stopService<WebService>()
         }
 
-        /**
-         * 以兼容方式启动前台服务
-         */
         fun startForeground(context: Context) {
-            // ——————【补全记忆逻辑】——————
-            // 确保通过快捷磁贴启动时，状态也能被持久化记录
+            // 确保磁贴等外部入口启动时也能记忆状态
             appCtx.putPrefBoolean(PREF_AUTO_START, true)
             val intent = Intent(context, WebService::class.java)
             context.startForegroundServiceCompat(intent)
         }
 
-        /**
-         * 处理外部指令（如 Tile），视为用户意图
-         */
         fun serve() {
             appCtx.putPrefBoolean(PREF_AUTO_START, true)
             appCtx.startService<WebService> {
@@ -90,16 +74,12 @@ class WebService : BaseService() {
     private val useWakeLock = appCtx.getPrefBoolean(PreferKey.webServiceWakeLock, false)
     private val wakeLock: PowerManager.WakeLock by lazy {
         powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "legado:WebService")
-            .apply {
-                setReferenceCounted(false)
-            }
+            .apply { setReferenceCounted(false) }
     }
     private val wifiLock by lazy {
         @Suppress("DEPRECATION")
         wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "legado:WebService")
-            ?.apply {
-                setReferenceCounted(false)
-            }
+            ?.apply { setReferenceCounted(false) }
     }
 
     private var httpServer: HttpServer? = null
@@ -176,7 +156,7 @@ class WebService : BaseService() {
             return
         }
 
-        // 幂等性检查：若环境未变且服务存活，不重复重启
+        // 核心加固：如果参数未变且服务存活，严禁重启
         if (httpServer?.isAlive == true && webSocketServer?.isAlive == true) {
             val currentFirstIp = addressList.firstOrNull()?.hostAddress
             if (currentFirstIp != null && hostAddress.contains(currentFirstIp) && hostAddress.contains(port.toString())) {
