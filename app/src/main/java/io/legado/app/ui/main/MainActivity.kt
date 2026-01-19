@@ -3,6 +3,8 @@
 package io.legado.app.ui.main
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager // 新增导入
+import android.content.Context      // 新增导入
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
@@ -136,17 +138,22 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         // 其他初始化逻辑
         setupBackCallback()
 
-        // ——————【修改重点】——————
-        // 逻辑修正：
-        // 1. 读取配置 web_service_auto，确认用户是否开启了自动开关
-        // 2. 增加 && !WebService.isRun 判断：只有当服务【当前未运行】时才执行启动
-        // 3. 避免了服务已运行时重复调用导致的停止或跳变问题
-        if (getPrefBoolean("web_service_auto", false) && !WebService.isRun) {
-            kotlin.runCatching {
-                WebService.startForeground(this)
-            }.onFailure {
-                it.printStackTrace()
-            }
+        // ——————【修改开始】——————
+        // 核心修正：
+        // 1. 不再信任 WebService.isRun 变量（进程重启时该变量会失效）。
+        // 2. 使用 isServiceRunning() 询问系统“服务真的在运行吗？”
+        // 3. 只有当配置为“开启”且系统说“没运行”时，才执行启动。
+        // 4. 延迟 1 秒执行，避开应用刚启动时的资源竞争或状态不稳。
+        if (getPrefBoolean("web_service_auto", false)) {
+             binding.viewPagerMain.postDelayed(1000) {
+                 if (!isServiceRunning(WebService::class.java)) {
+                     kotlin.runCatching {
+                         WebService.startForeground(this@MainActivity)
+                     }.onFailure {
+                         it.printStackTrace()
+                     }
+                 }
+             }
         }
         // ——————【修改结束】——————
 
@@ -154,6 +161,24 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         initView()
         upHomePage()
     }
+
+    // ——————【新增辅助方法】——————
+    /**
+     * 通过系统 ActivityManager 检查服务是否真正在运行。
+     * 这比静态变量 isRun 更可靠，能解决进程重启导致的状态误判问题。
+     */
+    private fun isServiceRunning(serviceClass: Class<*>): Boolean {
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        // 尽管该方法在 API 26+ 废弃，但对于检查“应用自己的服务”依然有效且被官方允许。
+        @Suppress("DEPRECATION")
+        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
+            if (serviceClass.name == service.service.className) {
+                return true
+            }
+        }
+        return false
+    }
+    // ——————【新增结束】——————
 
     override fun onResume() {
         super.onResume()
