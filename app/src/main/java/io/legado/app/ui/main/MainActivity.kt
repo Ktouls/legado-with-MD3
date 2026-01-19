@@ -96,13 +96,9 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private val fragmentMap = hashMapOf<Int, Fragment>()
     private var bottomMenuCount = 4
     private val realPositions = arrayOf(idBookshelf, idExplore, idRss, idMy)
-    private val adapter by lazy {
-        TabFragmentPageAdapter(this)
-    }
+    private val adapter by lazy { TabFragmentPageAdapter(this) }
     private lateinit var backCallback: OnBackPressedCallback
-    private val badge by lazy {
-        getNavigationBarView().getOrCreateBadge(R.id.menu_bookshelf)
-    }
+    private val badge by lazy { getNavigationBarView().getOrCreateBadge(R.id.menu_bookshelf) }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
@@ -136,8 +132,8 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         
         setupBackCallback()
         
-        // ——————【唯一状态恢复点：修正自启逻辑】——————
-        // 使用 PreferKey.webService 确保与 UI 开关同步，并增加运行状态判定防止重复启动
+        // ——————【关键修正：唯一状态恢复点】——————
+        // 使用 PreferKey.webService 确保与界面开关数据对齐
         if (!WebService.isRun && getPrefBoolean(PreferKey.webService, false)) {
             WebService.startSilent(this)
         }
@@ -200,7 +196,6 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     }
                 }
             }
-
             R.id.menu_discovery -> {
                 if (System.currentTimeMillis() - exploreReselected > 300) {
                     exploreReselected = System.currentTimeMillis()
@@ -280,14 +275,10 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      */
 
     private fun notifyAppCrash() {
-        if (!LocalConfig.appCrash || BuildConfig.DEBUG) {
-            return
-        }
+        if (!LocalConfig.appCrash || BuildConfig.DEBUG) return
         LocalConfig.appCrash = false
         alert(getString(R.string.draw), "检测到阅读发生了崩溃，是否打开崩溃日志以便报告问题？") {
-            yesButton {
-                showDialogFragment<CrashLogsDialog>()
-            }
+            yesButton { showDialogFragment<CrashLogsDialog>() }
             noButton()
         }
     }
@@ -296,19 +287,14 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      * 备份同步
      */
     private fun backupSync() {
-        if (!AppConfig.autoCheckNewBackup) {
-            return
-        }
+        if (!AppConfig.autoCheckNewBackup) return
         lifecycleScope.launch {
-            val lastBackupFile =
-                withContext(IO) { AppWebDav.lastBackUp().getOrNull() } ?: return@launch
+            val lastBackupFile = withContext(IO) { AppWebDav.lastBackUp().getOrNull() } ?: return@launch
             if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
                 LocalConfig.lastBackup = lastBackupFile.lastModify
                 alert(R.string.restore, R.string.webdav_after_local_restore_confirm) {
                     cancelButton()
-                    okButton {
-                        viewModel.restoreWebDav(lastBackupFile.displayName)
-                    }
+                    okButton { viewModel.restoreWebDav(lastBackupFile.displayName) }
                 }
             }
         }
@@ -317,28 +303,20 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putInt("currentPagePosition", pagePosition)
-        if (AppConfig.autoRefreshBook) {
-            outState.putBoolean("isAutoRefreshedBook", true)
-        }
+        if (AppConfig.autoRefreshBook) outState.putBoolean("isAutoRefreshedBook", true)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Coroutine.async {
-            BookHelp.clearInvalidCache()
-        }
-        if (!BuildConfig.DEBUG) {
-            Backup.autoBack(this)
-        }
+        Coroutine.async { BookHelp.clearInvalidCache() }
+        if (!BuildConfig.DEBUG) Backup.autoBack(this)
     }
 
     /**
      * 如果重启太快fragment不会重建,这里更新一下书架的排序
      */
     override fun recreate() {
-        (fragmentMap[getFragmentId(0)] as? BaseBookshelfFragment)?.run {
-            upSort()
-        }
+        (fragmentMap[getFragmentId(0)] as? BaseBookshelfFragment)?.upSort()
         super.recreate()
     }
 
@@ -358,9 +336,7 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 }
             }
         }
-        observeEvent<String>(PreferKey.threadCount) {
-            viewModel.upPool()
-        }
+        observeEvent<String>(PreferKey.threadCount) { viewModel.upPool() }
     }
 
     private fun getNavigationBarView(): NavigationBarView {
@@ -389,16 +365,9 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         menu.findItem(R.id.menu_rss).isVisible = AppConfig.showRSS
 
         var index = 0
-        if (AppConfig.showDiscovery) {
-            index++
-            realPositions[index] = idExplore
-        }
-        if (AppConfig.showRSS) {
-            index++
-            realPositions[index] = idRss
-        }
-        index++
-        realPositions[index] = idMy
+        if (AppConfig.showDiscovery) { index++; realPositions[index] = idExplore }
+        if (AppConfig.showRSS) { index++; realPositions[index] = idRss }
+        index++; realPositions[index] = idMy
         bottomMenuCount = index + 1
 
         binding.viewPagerMain.adapter?.notifyDataSetChanged()
@@ -427,51 +396,40 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             binding.navigationRailView.gone()
         }
 
-        val lp =
-            binding.navigationRailView.headerView!!.layoutParams as FrameLayout.LayoutParams
+        val lp = binding.navigationRailView.headerView!!.layoutParams as FrameLayout.LayoutParams
         lp.gravity = Gravity.START
 
         binding.navigationRailView.headerView!!
             .setPadding(
-                binding.navigationRailView.itemActiveIndicatorExpandedMarginHorizontal,
-                0,
-                binding.navigationRailView.itemActiveIndicatorExpandedMarginHorizontal,
-                0)
+                binding.navigationRailView.itemActiveIndicatorExpandedMarginHorizontal, 0,
+                binding.navigationRailView.itemActiveIndicatorExpandedMarginHorizontal, 0)
 
-        val efab =
-            binding.navigationRailView.headerView!!.findViewById<ExtendedFloatingActionButton>(R.id.nav_fab)
-        val button =
-            binding.navigationRailView.headerView!!.findViewById<ImageView>(R.id.nav_botton)
+        val efab = binding.navigationRailView.headerView!!.findViewById<ExtendedFloatingActionButton>(R.id.nav_fab)
+        val button = binding.navigationRailView.headerView!!.findViewById<ImageView>(R.id.nav_botton)
 
-        efab.let {
-            if (LocalConfig.navExtended) {
-                it.isExtended = true
-                binding.navigationRailView.expand()
-                button.setImageResource(R.drawable.ic_menu_open)
-            } else {
-                it.isExtended = false
-                binding.navigationRailView.collapse()
-                button.setImageResource(R.drawable.ic_menu)
-            }
+        if (LocalConfig.navExtended) {
+            efab.isExtended = true
+            binding.navigationRailView.expand()
+            button.setImageResource(R.drawable.ic_menu_open)
+        } else {
+            efab.isExtended = false
+            binding.navigationRailView.collapse()
+            button.setImageResource(R.drawable.ic_menu)
         }
 
-        efab.setOnClickListener {
-            startActivity<SearchActivity>()
-        }
+        efab.setOnClickListener { startActivity<SearchActivity>() }
 
         button.setOnClickListener {
-            efab.let { it1 ->
-                if (it1.isExtended) {
-                    efab.isExtended = false
-                    binding.navigationRailView.collapse()
-                    button.setImageResource(R.drawable.ic_menu)
-                } else {
-                    efab.isExtended = true
-                    binding.navigationRailView.expand()
-                    button.setImageResource(R.drawable.ic_menu_open)
-                }
-                LocalConfig.navExtended = it1.isExtended
+            if (efab.isExtended) {
+                efab.isExtended = false
+                binding.navigationRailView.collapse()
+                button.setImageResource(R.drawable.ic_menu)
+            } else {
+                efab.isExtended = true
+                binding.navigationRailView.expand()
+                button.setImageResource(R.drawable.ic_menu_open)
             }
+            LocalConfig.navExtended = efab.isExtended
         }
 
         navView.setOnItemSelectedListener { onNavigationItemSelected(it) }
@@ -483,35 +441,29 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             getNavigationBarView().menu[currentPosition].isChecked = true
             updateBackCallbackState()
         }
-
     }
 
     private fun updateBookshelfIcon(isRoot: Boolean) {
         val navView = getNavigationBarView()
         val bookshelfMenuItem = navView.menu.findItem(R.id.menu_bookshelf) ?: return
-
         if (isRoot) {
             bookshelfMenuItem.setIcon(R.drawable.ic_bottom_books)
         } else {
             val currentFragment = fragmentMap[getFragmentId(0)]
-            if (currentFragment is BookshelfFragment2) {
-                bookshelfMenuItem.setIcon(R.drawable.ic_arrow_back)
-            } else {
-                bookshelfMenuItem.setIcon(R.drawable.ic_bottom_books)
-            }
+            if (currentFragment is BookshelfFragment2) bookshelfMenuItem.setIcon(R.drawable.ic_arrow_back)
+            else bookshelfMenuItem.setIcon(R.drawable.ic_bottom_books)
         }
     }
 
     private fun upHomePage() {
         when (AppConfig.defaultHomePage) {
+            "bookshelf" -> {}
             "explore" -> if (AppConfig.showDiscovery && AppConfig.showBottomView) {
                 binding.viewPagerMain.setCurrentItem(realPositions.indexOf(idExplore), false)
             }
-
             "rss" -> if (AppConfig.showRSS && AppConfig.showBottomView) {
                 binding.viewPagerMain.setCurrentItem(realPositions.indexOf(idRss), false)
             }
-
             "my" -> if (AppConfig.showBottomView) {
                 binding.viewPagerMain.setCurrentItem(realPositions.indexOf(idMy), false)
             }
@@ -545,32 +497,20 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             if (position == 0) {
                 val fragment = fragmentMap[getFragmentId(0)] as? BookshelfFragment2
                 updateBookshelfIcon(fragment?.groupId == BookGroup.IdRoot)
-            } else {
-                updateBookshelfIcon(true)
-            }
+            } else updateBookshelfIcon(true)
             updateBackCallbackState()
         }
     }
 
-    private fun updateBackCallbackState() {
-        backCallback.isEnabled = (pagePosition != 0)
-    }
+    private fun updateBackCallbackState() { backCallback.isEnabled = (pagePosition != 0) }
 
-    private inner class TabFragmentPageAdapter(
-        activity: FragmentActivity
-    ) : FragmentStateAdapter(activity) {
-
+    private inner class TabFragmentPageAdapter(activity: FragmentActivity) : FragmentStateAdapter(activity) {
         override fun getItemCount(): Int = bottomMenuCount
-
         override fun createFragment(position: Int): Fragment {
             val fragment = when (getFragmentId(position)) {
                 idBookshelf1 -> BookshelfFragment1(position)
                 idBookshelf2 -> BookshelfFragment2(position).apply {
-                    this.onGroupIdChangedListener = { isRoot ->
-                        if (pagePosition == 0) {
-                            updateBookshelfIcon(isRoot)
-                        }
-                    }
+                    this.onGroupIdChangedListener = { isRoot -> if (pagePosition == 0) updateBookshelfIcon(isRoot) }
                 }
                 idBookshelf3 -> BookshelfFragment3(position)
                 idBookshelf4 -> BookshelfFragment4(position)
@@ -578,19 +518,11 @@ open class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 idRss -> RssFragment(position)
                 else -> MyFragment.newInstance(position)
             }
-
             fragmentMap[getFragmentId(position)] = fragment
             return fragment
         }
-
-        override fun getItemId(position: Int): Long {
-            return getFragmentId(position).toLong()
-        }
-
-        override fun containsItem(itemId: Long): Boolean {
-            return (0 until bottomMenuCount).any { getItemId(it) == itemId }
-        }
-
+        override fun getItemId(position: Int): Long = getFragmentId(position).toLong()
+        override fun containsItem(itemId: Long): Boolean = (0 until bottomMenuCount).any { getItemId(it) == itemId }
     }
 }
 
