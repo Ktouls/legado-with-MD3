@@ -38,8 +38,8 @@ import java.io.IOException
 class WebService : BaseService() {
 
     companion object {
-        // 统一使用 PreferKey.webService 确保与 UI 开关同步
-        const val PREF_KEY = PreferKey.webService
+        // 关键：必须与 UI 界面开关使用的 Key 严格一致
+        const val PREF_KEY = PreferKey.webService 
         var isRun = false
         var hostAddress = ""
 
@@ -85,9 +85,7 @@ class WebService : BaseService() {
     private var httpServer: HttpServer? = null
     private var webSocketServer: WebSocketServer? = null
     private var notificationList = mutableListOf<String>()
-    
-    // 启动锁，防止多线程竞争端口
-    private val serverLock = Any()
+    private val serverLock = Any() // 并发启动锁
     
     private val networkChangedListener by lazy {
         NetworkChangedListener(this)
@@ -104,7 +102,6 @@ class WebService : BaseService() {
         upTile(true)
         networkChangedListener.register()
         networkChangedListener.onNetworkChanged = {
-            // 网络变化时重新检查并绑定
             upWebServer()
         }
     }
@@ -122,7 +119,7 @@ class WebService : BaseService() {
                 upWebServer()
             }
             else -> {
-                // 如果服务已经在运行且环境没变，不重复触发启动逻辑
+                // 仅在未运行或服务器失效时才触发 bind
                 if (!isRun || httpServer?.isAlive != true) {
                     upWebServer()
                 } else {
@@ -167,20 +164,18 @@ class WebService : BaseService() {
 
             if (addressList.isEmpty()) {
                 toastOnUi("Web Service: No IP address found")
-                // 注意：这里仅更新通知栏状态，不建议立即 stopSelf 以免丢失自启 Pref
                 return
             }
 
-            // 深度判定：状态未变则直接忽略，解决 EADDRINUSE 的关键
-            val currentFirstIp = addressList.firstOrNull()?.hostAddress
+            // 幂等性检查，防止 EADDRINUSE
             if (httpServer?.isAlive == true && webSocketServer?.isAlive == true) {
+                val currentFirstIp = addressList.firstOrNull()?.hostAddress
                 if (currentFirstIp != null && hostAddress.contains(currentFirstIp) && hostAddress.contains(port.toString())) {
                     return
                 }
             }
 
             try {
-                // 先清理旧实例，再启动新实例
                 if (httpServer?.isAlive == true) httpServer?.stop()
                 if (webSocketServer?.isAlive == true) webSocketServer?.stop()
                 
@@ -205,7 +200,6 @@ class WebService : BaseService() {
                 webSocketServer = null
                 toastOnUi("Start Web Service failed: ${e.localizedMessage}")
                 e.printOnDebug()
-                // 启动失败不建议在这里修改 PREF_KEY 为 false，否则无法“记忆”
             }
         }
     }
