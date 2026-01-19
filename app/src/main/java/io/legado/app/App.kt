@@ -10,6 +10,8 @@ import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.graphics.scale
+import coil.ImageLoader
+import com.github.liuyueyi.quick.transfer.constants.TransType
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.DynamicColorsOptions
 import com.jeremyliao.liveeventbus.LiveEventBus
@@ -127,7 +129,6 @@ class App : Application() {
             LogUtils.init(this@App)
             LogUtils.d("App", "onCreate")
             LogUtils.logDeviceInfo()
-            //预下载Cronet so
             Cronet.preDownload()
             createNotificationChannels()
             LiveEventBus.config()
@@ -141,9 +142,7 @@ class App : Application() {
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))
             launch { installGmsTlsProvider(appCtx) }
             initRhino()
-            //初始化封面
             BookCover.toString()
-            //清除过期数据
             appDb.cacheDao.clearDeadline(System.currentTimeMillis())
             if (getPrefBoolean(PreferKey.autoClearExpired, true)) {
                 val clearTime = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(1)
@@ -154,23 +153,19 @@ class App : Application() {
             Backup.clearCache()
             ReadBookConfig.clearBgAndCache()
             ThemeConfig.clearBg()
-            //初始化简繁转换引擎
             when (AppConfig.chineseConverterType) {
                 1 -> {
                     ChineseUtils.fixT2sDict()
                     ChineseUtils.preLoad(true, TransType.TRADITIONAL_TO_SIMPLE)
                 }
-
                 2 -> ChineseUtils.preLoad(true, TransType.SIMPLE_TO_TRADITIONAL)
             }
-            //调整排序序号
             SourceHelp.adjustSortNumber()
-            //同步阅读记录
             if (AppConfig.syncBookProgress) {
                 AppWebDav.downloadAllBookProgress()
             }
             
-            // 已移除：WebService 异步自启逻辑。统一由 MainActivity 负责恢复，消除竞态冲突。
+            // 已移除 WebService 自启逻辑，确保启动链唯一性
         }
     }
 
@@ -232,11 +227,7 @@ class App : Application() {
         }
 
         notificationManager.createNotificationChannels(
-            listOf(
-                downloadChannel,
-                readAloudChannel,
-                webChannel
-            )
+            listOf(downloadChannel, readAloudChannel, webChannel)
         )
     }
 
@@ -254,7 +245,6 @@ class App : Application() {
     }
 
     class EventLogger : DefaultLogger() {
-
         override fun log(level: Level, msg: String) {
             super.log(level, msg)
             LogUtils.d(TAG, msg)
@@ -277,5 +267,4 @@ class App : Application() {
             }
         }
     }
-
 }
