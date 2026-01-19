@@ -38,13 +38,12 @@ import java.io.IOException
 class WebService : BaseService() {
 
     companion object {
-        const val PREF_AUTO_START = "web_service_auto" // 统一定义Key
+        const val PREF_AUTO_START = "web_service_auto" // 统一定义记忆 Key
         var isRun = false
         var hostAddress = ""
 
         /**
-         * 用户主动开启服务
-         * 记录意图为：需要自启 (true)
+         * 用户主动开启服务：记录状态并启动
          */
         fun start(context: Context) {
             appCtx.putPrefBoolean(PREF_AUTO_START, true)
@@ -52,29 +51,32 @@ class WebService : BaseService() {
         }
 
         /**
-         * 仅启动服务，不改变自启配置
-         * 用于 App 启动时的自动恢复
+         * 静默/自动启动：不修改配置，仅尝试拉起服务
          */
         fun startSilent(context: Context) {
             context.startService<WebService>()
         }
 
         /**
-         * 用户主动停止服务
-         * 记录意图为：不再自启 (false)
+         * 用户主动停止服务：记录状态并停止
          */
         fun stop(context: Context) {
             appCtx.putPrefBoolean(PREF_AUTO_START, false)
             context.stopService<WebService>()
         }
 
+        /**
+         * 以兼容方式启动前台服务
+         */
         fun startForeground(context: Context) {
             val intent = Intent(context, WebService::class.java)
             context.startForegroundServiceCompat(intent)
         }
 
+        /**
+         * 处理外部指令（如 Tile），视为用户意图
+         */
         fun serve() {
-            // 通过 Tile 或其他快捷方式启动，视为用户意图，应当记录开启状态
             appCtx.putPrefBoolean(PREF_AUTO_START, true)
             appCtx.startService<WebService> {
                 action = "serve"
@@ -91,14 +93,15 @@ class WebService : BaseService() {
     }
     private val wifiLock by lazy {
         @Suppress("DEPRECATION")
-        wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "legado:AudioPlayService")
+        wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "legado:WebService")
             ?.apply {
                 setReferenceCounted(false)
             }
     }
+
     private var httpServer: HttpServer? = null
     private var webSocketServer: WebSocketServer? = null
-    private var notificationList = mutableListOf(appCtx.getString(R.string.service_starting))
+    private var notificationList = mutableListOf<String>()
     private val networkChangedListener by lazy {
         NetworkChangedListener(this)
     }
@@ -113,7 +116,6 @@ class WebService : BaseService() {
         isRun = true
         upTile(true)
         networkChangedListener.register()
-        // 修正：当网络变化时，必须调用 upWebServer() 来重新绑定
         networkChangedListener.onNetworkChanged = {
             upWebServer()
         }
@@ -123,97 +125,87 @@ class WebService : BaseService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             IntentAction.stop -> {
-                // 用户点击通知栏的停止按钮，视为主动关闭，记录状态为 false
                 appCtx.putPrefBoolean(PREF_AUTO_START, false)
                 stopSelf()
             }
             "copyHostAddress" -> sendToClip(hostAddress)
-            "serve", IntentAction.start -> {
-                // 如果是通过 intent action 显式启动（如 Tile），确保记录开启状态
-                if (intent?.action == "serve") {
-                     appCtx.putPrefBoolean(PREF_AUTO_START, true)
-                }
-                if (useWakeLock) {
-                    wakeLock.acquire()
-                    wifiLock?.acquire()
-                }
+            "serve" -> {
+                appCtx.putPrefBoolean(PREF_AUTO_START, true)
                 upWebServer()
             }
             else -> upWebServer()
         }
-        return super.onStartCommand(intent, flags, startId)
+        return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
         if (useWakeLock) {
-            wakeLock.release()
-            wifiLock?.release()
+            if (wakeLock.isHeld) wakeLock.release()
+            if (wifiLock?.isHeld == true) wifiLock?.release()
         }
         networkChangedListener.unRegister()
         isRun = false
-        if (httpServer?.isAlive == true) {
-            httpServer?.stop()
-        }
-        if (webSocketServer?.isAlive == true) {
-            webSocketServer?.stop()
-        }
+        stopServers()
         postEvent(EventBus.WEB_SERVICE, "")
         FlowEventBus.post(EventBus.WEB_SERVICE, "")
         upTile(false)
+    }
+
+    private fun stopServers() {
+        try {
+            if (httpServer?.isAlive == true) httpServer?.stop()
+            httpServer = null
+            if (webSocketServer?.isAlive == true) webSocketServer?.stop()
+            webSocketServer = null
+        } catch (e: Exception) {
+            e.printOnDebug()
+        }
     }
 
     private fun upWebServer() {
         val addressList = NetworkUtils.getLocalIPAddress()
         val port = getPort()
 
-        // ——————【防御性编程：状态位检查】——————
-        // 如果服务器已经在运行，检查当前 IP 和端口是否与已运行的实例匹配
-        // 如果匹配，说明服务正常，直接跳过启动逻辑，防止 EADDRINUSE 误报
+        if (addressList.isEmpty()) {
+            toastOnUi("Web Service: No IP address found")
+            stopSelf()
+            return
+        }
+
+        // ——————【逻辑完整性：幂等性检查】——————
+        // 核心：若服务已运行且关键参数（IP、端口）未变，则直接忽略，防止重复启动导致的冲突
         if (httpServer?.isAlive == true && webSocketServer?.isAlive == true) {
-            val currentIp = addressList.firstOrNull()?.hostAddress
-            if (currentIp != null && hostAddress.contains(currentIp) && hostAddress.contains(port.toString())) {
+            val currentFirstIp = addressList.firstOrNull()?.hostAddress
+            if (currentFirstIp != null && hostAddress.contains(currentFirstIp) && hostAddress.contains(port.toString())) {
                 return
             }
         }
-        // ——————【检查结束】——————
 
-        if (httpServer?.isAlive == true) {
-            httpServer?.stop()
-        }
-        if (webSocketServer?.isAlive == true) {
-            webSocketServer?.stop()
-        }
-        
-        if (addressList.any()) {
-            httpServer = HttpServer(port)
-            webSocketServer = WebSocketServer(port + 1)
-            try {
-                httpServer?.start()
-                webSocketServer?.start(1000 * 30) // 通信超时设置
-                notificationList.clear()
-                notificationList.addAll(addressList.map { address ->
-                    getString(
-                        R.string.http_ip,
-                        address.hostAddress,
-                        port
-                    )
-                })
-                hostAddress = notificationList.first()
-                isRun = true
-                postEvent(EventBus.WEB_SERVICE, hostAddress)
-                FlowEventBus.post(EventBus.WEB_SERVICE, hostAddress)
-                startForegroundNotification()
-            } catch (e: IOException) {
-                // 如果端口绑定失败，只有在没有任何存活实例时才抛出错误并停止
-                if (httpServer?.isAlive != true) {
-                    toastOnUi(e.localizedMessage ?: "")
-                    e.printOnDebug()
-                    stopSelf()
-                }
+        // 参数发生变化，先停止旧服务
+        stopServers()
+
+        httpServer = HttpServer(port)
+        webSocketServer = WebSocketServer(port + 1)
+
+        try {
+            httpServer?.start()
+            webSocketServer?.start(30000)
+
+            notificationList.clear()
+            addressList.forEach { address ->
+                notificationList.add(getString(R.string.http_ip, address.hostAddress, port))
             }
-        } else {
-            toastOnUi("web service cant start, no ip address")
+
+            hostAddress = notificationList.firstOrNull() ?: ""
+            isRun = true
+            postEvent(EventBus.WEB_SERVICE, hostAddress)
+            FlowEventBus.post(EventBus.WEB_SERVICE, hostAddress)
+            startForegroundNotification()
+        } catch (e: IOException) {
+            // 端口绑定失败或资源冲突
+            toastOnUi("Start Web Service failed: ${e.localizedMessage}")
+            e.printOnDebug()
             stopSelf()
         }
     }
@@ -226,26 +218,21 @@ class WebService : BaseService() {
         return port
     }
 
-    /**
-     * 更新通知
-     */
     override fun startForegroundNotification() {
         val builder = NotificationCompat.Builder(this, AppConst.channelIdWeb)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setSmallIcon(R.drawable.ic_web_service_noti)
             .setOngoing(true)
             .setContentTitle(getString(R.string.web_service))
-            .setContentText(notificationList.joinToString("\n"))
-            .setContentIntent(
-                servicePendingIntent<WebService>("copyHostAddress")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(notificationList.joinToString("\n")))
+            .setContentIntent(servicePendingIntent<WebService>("copyHostAddress"))
+            .addAction(
+                R.drawable.ic_stop_black_24dp,
+                getString(R.string.cancel),
+                servicePendingIntent<WebService>(IntentAction.stop)
             )
-        builder.addAction(
-            R.drawable.ic_stop_black_24dp,
-            getString(R.string.cancel),
-            servicePendingIntent<WebService>(IntentAction.stop)
-        )
-        val notification = builder.build()
-        startForeground(NotificationId.WebService, notification)
+        
+        startForeground(NotificationId.WebService, builder.build())
     }
 
     @SuppressLint("ObsoleteSdkInt")
@@ -253,14 +240,9 @@ class WebService : BaseService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             kotlin.runCatching {
                 startService<WebTileService> {
-                    action = if (active) {
-                        IntentAction.start
-                    } else {
-                        IntentAction.stop
-                    }
+                    action = if (active) IntentAction.start else IntentAction.stop
                 }
             }
-
         }
     }
 }
