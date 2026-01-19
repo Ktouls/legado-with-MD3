@@ -10,8 +10,6 @@ import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.core.graphics.scale
-import coil.ImageLoader
-import com.github.liuyueyi.quick.transfer.constants.TransType
 import com.google.android.material.color.DynamicColors
 import com.google.android.material.color.DynamicColorsOptions
 import com.jeremyliao.liveeventbus.LiveEventBus
@@ -54,9 +52,6 @@ import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.rhino.NativeBaseSource
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.storage.Backup
-// ——————【新增引用】——————
-import io.legado.app.service.WebService
-// ——————【修改结束】——————
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.BookCover
 import io.legado.app.utils.ChineseUtils
@@ -174,35 +169,11 @@ class App : Application() {
             if (AppConfig.syncBookProgress) {
                 AppWebDav.downloadAllBookProgress()
             }
-
-            // ——————【修改开始】Web服务智能自启检查——————
-            // 严谨模式：仅当配置明确为 true 时执行静默启动，且 startSilent 不会修改配置
-            if (getPrefBoolean(WebService.PREF_AUTO_START, false)) {
-                WebService.startSilent(this@App)
-            }
-            // ——————【修改结束】——————
+            
+            // 已移除：WebService 异步自启逻辑。统一由 MainActivity 负责恢复，消除竞态冲突。
         }
     }
 
-//    override fun onConfigurationChanged(newConfig: Configuration) {
-//        super.onConfigurationChanged(newConfig)
-//        val diff = newConfig.diff(oldConfig)
-//        if ((diff and ActivityInfo.CONFIG_UI_MODE) != 0) {
-//            applyDayNight(this)
-//        }
-//        oldConfig = Configuration(newConfig)
-//    }
-
-    /**
-     * 尝试在安装了GMS的设备上(GMS或者MicroG)使用GMS内置的Conscrypt
-     * 作为首选JCE提供程序，而使Okhttp在低版本Android上
-     * 能够启用TLSv1.3
-     * https://f-droid.org/zh_Hans/2020/05/29/android-updates-and-tls-connections.html
-     * https://developer.android.google.cn/reference/javax/net/ssl/SSLSocket
-     *
-     * @param context
-     * @return
-     */
     private fun installGmsTlsProvider(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return
@@ -226,9 +197,6 @@ class App : Application() {
         }
     }
 
-    /**
-     * 创建通知ID
-     */
     private fun createNotificationChannels() {
         val downloadChannel = NotificationChannel(
             channelIdDownload,
@@ -263,7 +231,6 @@ class App : Application() {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
 
-        //向notification manager 提交channel
         notificationManager.createNotificationChannels(
             listOf(
                 downloadChannel,
