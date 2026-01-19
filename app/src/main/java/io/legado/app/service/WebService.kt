@@ -38,10 +38,10 @@ import java.io.IOException
 class WebService : BaseService() {
 
     companion object {
-        // 关键：必须与 UI 界面开关使用的 Key 严格一致
-        const val PREF_KEY = PreferKey.webService 
+        const val PREF_KEY = PreferKey.webService
         var isRun = false
         var hostAddress = ""
+        var port = 1122 // 记录当前实际运行的端口
 
         fun start(context: Context) {
             appCtx.putPrefBoolean(PREF_KEY, true)
@@ -85,8 +85,8 @@ class WebService : BaseService() {
     private var httpServer: HttpServer? = null
     private var webSocketServer: WebSocketServer? = null
     private var notificationList = mutableListOf<String>()
-    private val serverLock = Any() // 并发启动锁
-    
+    private val serverLock = Any()
+
     private val networkChangedListener by lazy {
         NetworkChangedListener(this)
     }
@@ -119,7 +119,6 @@ class WebService : BaseService() {
                 upWebServer()
             }
             else -> {
-                // 仅在未运行或服务器失效时才触发 bind
                 if (!isRun || httpServer?.isAlive != true) {
                     upWebServer()
                 } else {
@@ -160,56 +159,72 @@ class WebService : BaseService() {
     private fun upWebServer() {
         synchronized(serverLock) {
             val addressList = NetworkUtils.getLocalIPAddress()
-            val port = getPort()
+            
+            // 获取用户设置的起始端口
+            var currentPort = getPrefInt(PreferKey.webPort, 1122)
+            if (currentPort > 65530 || currentPort < 1024) {
+                currentPort = 1122
+            }
 
             if (addressList.isEmpty()) {
-                toastOnUi("Web Service: No IP address found")
+                // 网络未就绪，暂不停止服务，等待下次回调，防止UI闪烁
                 return
             }
 
-            // 幂等性检查，防止 EADDRINUSE
+            // ——————【状态检查】——————
+            // 如果服务活着，且IP没变，且端口也没变，直接跳过
             if (httpServer?.isAlive == true && webSocketServer?.isAlive == true) {
                 val currentFirstIp = addressList.firstOrNull()?.hostAddress
-                if (currentFirstIp != null && hostAddress.contains(currentFirstIp) && hostAddress.contains(port.toString())) {
+                if (currentFirstIp != null && 
+                    hostAddress.contains(currentFirstIp) && 
+                    port == currentPort) { // 检查端口是否一致
                     return
                 }
             }
 
-            try {
-                if (httpServer?.isAlive == true) httpServer?.stop()
-                if (webSocketServer?.isAlive == true) webSocketServer?.stop()
-                
-                httpServer = HttpServer(port)
-                webSocketServer = WebSocketServer(port + 1)
+            stopServers()
 
-                httpServer?.start()
-                webSocketServer?.start(30000)
+            // ——————【端口自动重试机制】——————
+            // 尝试绑定端口，如果占用则+1，最多尝试10次
+            var isSuccess = false
+            for (i in 0 until 10) {
+                val tryPort = currentPort + i
+                try {
+                    httpServer = HttpServer(tryPort)
+                    httpServer?.start()
+                    
+                    // HTTP启动成功后，尝试启动WebSocket
+                    webSocketServer = WebSocketServer(tryPort + 1)
+                    webSocketServer?.start(30000)
+                    
+                    // 全部成功，更新当前实际端口
+                    port = tryPort
+                    isSuccess = true
+                    break 
+                } catch (e: IOException) {
+                    // 绑定失败，清理并尝试下一个端口
+                    stopServers()
+                    e.printOnDebug()
+                }
+            }
 
+            if (isSuccess) {
                 notificationList.clear()
                 addressList.forEach { address ->
                     notificationList.add(getString(R.string.http_ip, address.hostAddress, port))
                 }
-
                 hostAddress = notificationList.firstOrNull() ?: ""
                 isRun = true
                 postEvent(EventBus.WEB_SERVICE, hostAddress)
                 FlowEventBus.post(EventBus.WEB_SERVICE, hostAddress)
                 startForegroundNotification()
-            } catch (e: IOException) {
-                httpServer = null
-                webSocketServer = null
-                toastOnUi("Start Web Service failed: ${e.localizedMessage}")
-                e.printOnDebug()
+            } else {
+                // 重试10次都失败，才彻底放弃
+                isRun = false
+                toastOnUi("Web Service Start Failed: Ports $currentPort-${currentPort+10} are busy.")
+                stopSelf()
             }
         }
-    }
-
-    private fun getPort(): Int {
-        var port = getPrefInt(PreferKey.webPort, 1122)
-        if (port > 65530 || port < 1024) {
-            port = 1122
-        }
-        return port
     }
 
     override fun startForegroundNotification() {
